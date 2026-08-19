@@ -1422,7 +1422,7 @@ function drawUnit(u) {
   const state = (time - u.atkT < 0.4 && anims.attack) ? 'attack' : (u.moving && anims.walk ? 'walk' : 'idle');
   u._atkAnim = state === 'attack';
   const sheet = anims[state] || anims.idle; if (!sheet) return;
-  let size = u.kind === 'hero' ? 120 : u.kind === 'monster' ? (u.key === 'mawborn_pitbrute' ? 116 : 96) : 84;
+  let size = u.kind === 'hero' ? (u.hkey === 'sovereign' ? 180 : 120) : u.kind === 'monster' ? (u.key === 'mawborn_pitbrute' ? 116 : 96) : 84;
   if (u.kind !== 'hero') size = Math.round(size * (u.vScale || 1));
   const hFlip = (Math.cos(u.face) < 0) !== (u.kind !== 'hero' && u.vMirror && !u.moving && time - u.atkT > 0.5);
   // ground: pool shadow + team ellipse
