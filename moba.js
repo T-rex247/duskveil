@@ -112,6 +112,21 @@ function feathered(sheet, key) {
     const rg = g.createRadialGradient(cxm, cym, r * 0.62, cxm, cym, r * 0.96);
     rg.addColorStop(0, 'rgba(0,0,0,1)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = rg; g.fillRect(i * sheet.fw, 0, sheet.fw, sheet.fh);
+    // wide cells: the radial misses the horizontal edges — feather all four sides too
+    const m = Math.round(sheet.fw * 0.10);
+    let eg = g.createLinearGradient(i * sheet.fw, 0, i * sheet.fw + m, 0);
+    eg.addColorStop(0, 'rgba(0,0,0,0)'); eg.addColorStop(1, 'rgba(0,0,0,1)');
+    g.fillStyle = eg; g.fillRect(i * sheet.fw, 0, m, sheet.fh);
+    eg = g.createLinearGradient((i + 1) * sheet.fw, 0, (i + 1) * sheet.fw - m, 0);
+    eg.addColorStop(0, 'rgba(0,0,0,0)'); eg.addColorStop(1, 'rgba(0,0,0,1)');
+    g.fillStyle = eg; g.fillRect((i + 1) * sheet.fw - m, 0, m, sheet.fh);
+    const mv = Math.round(sheet.fh * 0.10);
+    eg = g.createLinearGradient(0, 0, 0, mv);
+    eg.addColorStop(0, 'rgba(0,0,0,0)'); eg.addColorStop(1, 'rgba(0,0,0,1)');
+    g.fillStyle = eg; g.fillRect(i * sheet.fw, 0, sheet.fw, mv);
+    eg = g.createLinearGradient(0, sheet.fh, 0, sheet.fh - mv);
+    eg.addColorStop(0, 'rgba(0,0,0,0)'); eg.addColorStop(1, 'rgba(0,0,0,1)');
+    g.fillStyle = eg; g.fillRect(i * sheet.fw, sheet.fh - mv, sheet.fw, mv);
   }
   FEATHERED[key] = c;
   return c;
@@ -190,6 +205,7 @@ function mkUnit(team, key, x, y, stats, kind) {
     id: eid++, team, key, kind: kind || 'minion', x, y, face: team === 0 ? 0 : Math.PI,
     hp: stats.hp, maxHp: stats.hp, dmg: stats.dmg, range: stats.range, speed: stats.speed,
     r: stats.r, cd: stats.cd, cdT: 0, dead: false, atkT: -9, hitT: -9,
+    vScale: 0.9 + Math.random() * 0.22, vMirror: Math.random() < 0.5,
     order: null, target: null, sh: 0, shT: 0, haste: 1, hasteT: 0,
     kbx: 0, kby: 0, kbT: -9, camp: null, vPhase: Math.random(),
   };
@@ -389,6 +405,7 @@ function sparks(x, y, ang, rgb, mag) {
 const sheetFxList = [];
 function sheetFx(key, o) {
   const s = FX[key]; if (!s) return;
+  if (!o.travel) { o.size = (o.size || 60) * (0.8 + Math.random() * 0.5); o.spin = (Math.random() - .5) * 1.4; }
   sheetFxList.push({ key, s, t0: time, dur: o.dur || s.n / s.fps, ...o });
   if (sheetFxList.length > 80) sheetFxList.shift();
 }
@@ -845,7 +862,11 @@ function paintBar() {
     if (player.level < need) { cdel.classList.remove('hidden'); cdel.textContent = 'L' + need; }
     else {
       const left = player.abCd[i] - time;
-      if (left > 0) { cdel.classList.remove('hidden'); cdel.textContent = Math.ceil(left); }
+      if (left > 0) {
+        cdel.classList.remove('hidden'); cdel.textContent = Math.ceil(left);
+        const pct = Math.max(0, Math.min(100, left / ab.cd * 100));
+        cdel.style.background = 'conic-gradient(rgba(5,7,10,.88) ' + pct + '%, rgba(5,7,10,.25) ' + pct + '%)';
+      }
       else {
         cdel.classList.add('hidden');
         if (ab.ult) el.classList.add('ready-ult');
@@ -858,13 +879,15 @@ function paintBar() {
 /* ============================ feed / hud ============================ */
 function feed(t) {
   const f = $('feed');
+  if (feed._last === t && time - (feed._lastAt || 0) < 3) return;
+  feed._last = t; feed._lastAt = time;
   const d = document.createElement('div');
   d.textContent = t;
   if (/Your ally|You /.test(t)) d.className = 't0';
   else if (/Enemy|slain by your ally/.test(t)) d.className = 't1';
   if (/gold|ALTAR/.test(t)) d.className += ' gold';
   f.appendChild(d);
-  while (f.children.length > 4) f.removeChild(f.firstChild);
+  while (f.children.length > 3) f.removeChild(f.firstChild);
   setTimeout(() => { if (d.parentNode) d.parentNode.removeChild(d); }, 6000);
 }
 function paintHud() {
@@ -875,10 +898,11 @@ function paintHud() {
   $('tKD').textContent = kills + '/' + deaths;
   const m = Math.floor(time / 60), s = Math.floor(time % 60);
   $('tClock').textContent = m + ':' + (s < 10 ? '0' : '') + s;
-  $('hpin').style.width = clamp(player.hp / player.maxHp * 100, 0, 100) + '%';
+  $('hpin').style.width = player.dead ? '0%' : clamp(player.hp / player.maxHp * 100, 0, 100) + '%';
+  $('portrait').style.filter = player.dead ? 'grayscale(1) brightness(0.6)' : '';
   $('hpin').style.background = player.hp / player.maxHp > .5 ? 'linear-gradient(180deg,#7fe08a,#3f9e4c)'
     : player.hp / player.maxHp > .25 ? 'linear-gradient(180deg,#ffd98a,#c99022)' : 'linear-gradient(180deg,#ff8a7a,#b23428)';
-  $('lbHp').textContent = Math.max(0, Math.round(player.hp)) + '/' + player.maxHp + (player.sh > 0 ? ' (+' + Math.round(player.sh) + ')' : '');
+  $('lbHp').textContent = (player.dead ? 0 : Math.max(0, Math.round(player.hp))) + '/' + player.maxHp + (player.sh > 0 ? ' (+' + Math.round(player.sh) + ')' : '');
   $('lbBuff').textContent = (player.buff ? player.buff + ' ' : '') + (player.recallT ? 'RECALLING ' + Math.ceil(player.recallT - time) : '');
   $('xpin').style.width = (player.level >= 9 ? 100 : player.xp / xpNeed(player.level) * 100) + '%';
   paintBar();
@@ -939,8 +963,10 @@ function buildGround() {
     bg.fillStyle = fg; bg.fillRect(0, 0, WORLD.w, 240);
     g.drawImage(band, 0, 0, band.width, band.height, 0, y - 120, WORLD.w, 240);
     g.globalCompositeOperation = 'multiply';
-    g.fillStyle = 'rgba(190,180,190,0.9)';
-    g.fillRect(0, y - 120, WORLD.w, 240);
+    const lg2 = g.createLinearGradient(0, y - 150, 0, y + 150);
+    lg2.addColorStop(0, 'rgba(255,255,255,1)'); lg2.addColorStop(0.3, 'rgba(190,180,190,0.9)');
+    lg2.addColorStop(0.7, 'rgba(190,180,190,0.9)'); lg2.addColorStop(1, 'rgba(255,255,255,1)');
+    g.fillStyle = lg2; g.fillRect(0, y - 150, WORLD.w, 300);
     g.globalCompositeOperation = 'source-over';
   };
   for (const y of LANES) lane(y);
@@ -950,14 +976,14 @@ function buildGround() {
       g.drawImage(TILES.dirt, x, y, Math.min(T, bx + 520 - x), Math.min(T, MID_Y + 240 - y));
   }
   // 4. altar: cratered clearing + crystal centerpiece + emissive glow
-  if (TILES.cratered) { g.save(); g.beginPath(); g.ellipse(ALTAR.x, ALTAR.y, 240, 170, 0, 0, TAU); g.clip(); g.drawImage(TILES.cratered, ALTAR.x - 256, ALTAR.y - 256, 512, 512); g.restore(); }
+  if (TILES.cratered) { g.save(); g.beginPath(); g.ellipse(ALTAR.x, ALTAR.y, 220, 155, 0, 0, TAU); g.clip(); g.globalAlpha = 0.7; g.translate(ALTAR.x, ALTAR.y); g.rotate(1.2); g.drawImage(TILES.cratered, -300, -300, 600, 600); g.restore(); g.globalAlpha = 1; }
   const ag = g.createRadialGradient(ALTAR.x, ALTAR.y, 20, ALTAR.x, ALTAR.y, 260);
   ag.addColorStop(0, 'rgba(150,220,255,0.30)'); ag.addColorStop(1, 'rgba(150,220,255,0)');
   g.fillStyle = ag; g.fillRect(ALTAR.x - 260, ALTAR.y - 260, 520, 520);
   if (TILES.crystal_rich) g.drawImage(TILES.crystal_rich, ALTAR.x - 90, ALTAR.y - 150, 180, 180);
   // 5. camp clearings
   for (const c of JUNGLE) {
-    if (TILES.cratered) { g.save(); g.beginPath(); g.ellipse(c.x, c.y, 150, 100, 0, 0, TAU); g.clip(); g.globalAlpha = 0.85; g.drawImage(TILES.cratered, c.x - 256, c.y - 256, 512, 512); g.restore(); g.globalAlpha = 1; }
+    if (TILES.cratered) { g.save(); g.beginPath(); g.ellipse(c.x, c.y, 130, 90, 0, 0, TAU); g.clip(); g.globalAlpha = 0.55; g.translate(c.x, c.y); g.rotate(rnd() * TAU); const cs = 380 + rnd() * 200; g.drawImage(TILES.cratered, -cs / 2, -cs / 2, cs, cs); g.restore(); g.globalAlpha = 1; }
     if (c.big && TILES.bones) g.drawImage(TILES.bones, c.x + 90, c.y - 150, 150, 150);
   }
   // 6. doodads: trees + rocks in the jungle, ruins accents, rock-lined edges
@@ -1002,12 +1028,12 @@ function drawSheet(u, sheet, size, hFlip, alpha) {
   if (hFlip) cx.scale(-1, 1);
   // hit flash pop
   const hitAge = time - u.hitT;
-  const pop = hitAge < 0.13 ? 1 + 0.08 * (1 - hitAge / 0.13) : 1;
+  const pop = hitAge < 0.22 ? 1 + 0.08 * (1 - hitAge / 0.22) : 1;
   cx.scale(pop, pop);
   cx.drawImage(sheet.img, fi * sheet.fw, 0, sheet.fw, sheet.fh, -size / 2, -size / 2, size, size);
-  if (hitAge < 0.13 && hitAge >= 0) {
+  if (hitAge < 0.22 && hitAge >= 0) {
     cx.globalCompositeOperation = 'lighter';
-    cx.globalAlpha = 0.8 * (1 - hitAge / 0.13);
+    cx.globalAlpha = 0.8 * (1 - hitAge / 0.22);
     cx.drawImage(sheet.img, fi * sheet.fw, 0, sheet.fw, sheet.fh, -size / 2, -size / 2, size, size);
   }
   cx.restore();
@@ -1018,8 +1044,9 @@ function drawUnit(u) {
   const anims = ANIMS[u.key]; if (!anims) return;
   const state = (time - u.atkT < 0.4 && anims.attack) ? 'attack' : (u.moving && anims.walk ? 'walk' : 'idle');
   const sheet = anims[state] || anims.idle; if (!sheet) return;
-  const size = u.kind === 'hero' ? 120 : u.kind === 'monster' ? (u.key === 'mawborn_pitbrute' ? 116 : 96) : 84;
-  const hFlip = Math.cos(u.face) < 0;
+  let size = u.kind === 'hero' ? 120 : u.kind === 'monster' ? (u.key === 'mawborn_pitbrute' ? 116 : 96) : 84;
+  if (u.kind !== 'hero') size = Math.round(size * (u.vScale || 1));
+  const hFlip = (Math.cos(u.face) < 0) !== (u.kind !== 'hero' && u.vMirror && !u.moving && time - u.atkT > 0.5);
   // ground: pool shadow + team ellipse
   cx.save();
   cx.translate(sx, sy + size * 0.30 * ZOOM);
@@ -1112,6 +1139,7 @@ function drawFxAll() {
     cx.globalAlpha = 0.9 * clamp(1 - Math.max(0, t - 0.62) / 0.38, 0, 1);
     cx.translate(sx, sy);
     if (e.travel) cx.rotate(Math.atan2(e.y2 - e.y, e.x2 - e.x));
+    else if (e.spin) cx.rotate(e.spin);
     const sz = e.size * ZOOM;
     cx.drawImage(im, fi * e.s.fw, 0, e.s.fw, e.s.fh, -sz / 2, -sz / 2, sz, sz);
     cx.restore();
@@ -1129,7 +1157,7 @@ function drawFxAll() {
     cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
     cx.globalAlpha = a * .6; cx.lineWidth = b.w * .42 * pulse * ZOOM;
     cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
-    cx.globalAlpha = a * .95; cx.strokeStyle = '#fff'; cx.lineWidth = Math.max(1.4, b.w * .12) * ZOOM;
+    cx.globalAlpha = a * .8; cx.strokeStyle = '#fffbe8'; cx.lineWidth = Math.max(1.2, b.w * .1) * ZOOM;
     cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
     for (const [ex, ey, er] of [[x1, y1, b.w * .9 * ZOOM], [x2, y2, b.w * 1.8 * ZOOM]]) {
       const g = cx.createRadialGradient(ex, ey, 0, ex, ey, er);
@@ -1400,14 +1428,15 @@ function startGame(hk) {
   heroes.push(player);
   // two AI allies from the rest of the roster; enemy team of three (roster of
   // four means one mirror match — the lane rival)
-  const rest = all.filter(k => k !== hk).sort(() => Math.random() - .5);
-  const allies = rest.slice(0, 2);
+  let rest = all.filter(k => k !== hk).sort(() => Math.random() - .5);
+  let allies = rest.slice(0, 2);
+  if (DEMOF) allies = ['corwen', 'ravener'];
   allies.forEach((k, i) => {
     const h = mkHero(0, k, 380, MID_Y + 90 + i * 60);
     h.lane = i === 0 ? 1 : 2;                      // ally 1 bot lane, ally 2 jungles
     heroes.push(h);
   });
-  const epool = all.sort(() => Math.random() - .5).slice(0, 3);
+  const epool = DEMOF ? ['ravener', 'corwen', 'liora'] : all.sort(() => Math.random() - .5).slice(0, 3);
   epool.forEach((k, i) => {
     const h = mkHero(1, k, WORLD.w - 380, MID_Y + (i - 1) * 80);
     h.lane = i;                                     // top / bot / jungle
@@ -1428,7 +1457,7 @@ function startGame(hk) {
     for (const team of [0, 1]) {
       for (let i = 0; i < 6; i++) {
         const d = MINIONS[team][i < 4 ? 0 : 1];
-        const u = mkUnit(team, d.key, ALTAR.x + (team === 0 ? -170 : 170) + (Math.random() - .5) * 60, ALTAR.y - 120 + i * 44, d);
+        const u = mkUnit(team, d.key, ALTAR.x + (team === 0 ? -1 : 1) * (150 + Math.random() * 120), ALTAR.y - 150 + i * 52 + (Math.random() - .5) * 40, d);
         u.order = { x: ALTAR.x + (team === 0 ? 60 : -60), y: u.y };
         units.push(u);
       }
