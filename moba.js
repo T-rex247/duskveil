@@ -266,7 +266,7 @@ function mkHero(team, hkey, x, y) {
 }
 function heroStat(u) {
   const h = u.hero, l = u.level;
-  u.maxHp = Math.round((h.hp + h.hpG * (l - 1)) * 1.45) + itemStat(u, 'hp');
+  u.maxHp = Math.round((h.hp + h.hpG * (l - 1)) * 1.85) + itemStat(u, 'hp');
   u.dmg = h.dmg + h.dmgG * (l - 1);
   if (DEMOF) u.maxHp = Math.round(u.maxHp * (u.kind === 'hero' ? (u === player ? 14 : 8) : 3));
 }
@@ -375,6 +375,7 @@ function effDmg(u) {
 }
 function dealDamage(t, amt, src) {
   if (NET.guest) return;
+  if (t.kind === 'hero') amt = Math.round(amt * 0.62);   // heroes take 38% less — fights last longer (Tee 2026-08-19)
   if (DEMOF && t.plate) return;                    // demo: structures stay pristine
   if (t.hp === undefined || t.dead) return;
   if (t.sh > 0) { const a = Math.min(t.sh, amt); t.sh -= a; amt -= a; }
