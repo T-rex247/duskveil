@@ -276,7 +276,7 @@ function grantXp(u, amt) {
 /* ============================ setup ============================ */
 function stage() {
   units = []; towers = []; fx = []; beams = []; corpses = []; telegraphs = [];
-  time = 0; over = false; waveT = 5; kills = 0; deaths = 0; gold = 0;
+  time = 0; over = false; waveT = 5; kills = 0; deaths = 0; gold = DEMOF ? 0 : 1400;
   ALTAR.prog = 0; ALTAR.owner = -1; ALTAR.lockT = 60; ALTAR.capTeam = -1;   // altar opens at 1:00
   for (const team of [0, 1]) {
     const M = x => team === 0 ? x : WORLD.w - x;
@@ -1052,7 +1052,7 @@ function paintShop() {
 }
 function paintHud() {
   if (!player) return;
-  if (time > 10 && Math.floor(time) !== paintHud._gs) { paintHud._gs = Math.floor(time); gold += 2; }
+  if (time > 10 && Math.floor(time) !== paintHud._gs) { paintHud._gs = Math.floor(time); gold += DEMOF ? 2 : 3; }
   $('tGold').textContent = gold;
   $('tLvl').textContent = player.level;
   $('plvl').textContent = player.level;
@@ -1800,7 +1800,10 @@ function startGame(hk) {
     h.lane = i;                                     // top / bot / jungle
     heroes.push(h);
   });
-  for (const h of heroes) { heroStat(h); h.hp = h.maxHp; units.push(h); }
+  for (const h of heroes) {
+    h.level = 6;                     // ARAM rules: the whole kit is live from minute one
+    heroStat(h); h.hp = h.maxHp; units.push(h);
+  }
   if (DEMOF) {
     // everyone level 6 (ults online), arrayed in two arcs around the altar
     heroes.forEach((h, i) => {
