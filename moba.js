@@ -372,7 +372,7 @@ function dealDamage(t, amt, src) {
   const okNum = !t._dmgAt || time - t._dmgAt > 0.18; if (okNum) t._dmgAt = time;
   if (amt >= 1 && okNum) {
     t._dmgSlot = ((t._dmgSlot || 0) + 1) % 3;
-    const dn = { kind: 'dmg', x: t.x + (t._dmgSlot - 1) * 34, y: t.y - (t.r || 20) - 12 - t._dmgSlot * 14,
+    const dn = { kind: 'dmg', x: t.x + (t._dmgSlot - 1) * 34, y: t.y - (t.r || 20) - 26 - t._dmgSlot * 16,
       vy: -56, life: 1.15, max: 1.15, amt: Math.round(amt),
       c: (src === player) ? '255,220,120' : (t === player ? '255,110,90' : '245,248,255') };
     fxPush(dn);
@@ -865,7 +865,7 @@ function heroesThink(dt) {
     if (foeHero && foeHero.hp < foeHero.maxHp * .5) { e.target = foeHero; continue; }
     if (m) { e.target = m; continue; }
     e.target = null;
-    if (DEMOF) { e.order = { x: ALTAR.x + (Math.random() - .5) * 220, y: ALTAR.y + (Math.random() - .5) * 180 }; continue; }
+    if (DEMOF) { e.order = { x: ALTAR.x + (Math.random() - .5) * 380, y: ALTAR.y + (Math.random() - .5) * 300 }; continue; }
     // jungler contests the altar when it's hot; laners walk their lane
     if (e.lane === 2 && ALTAR.owner !== e.team && time > ALTAR.lockT) {
       e.order = { x: ALTAR.x + (Math.random() - .5) * 40, y: ALTAR.y + (Math.random() - .5) * 40 };
@@ -1189,7 +1189,7 @@ function buildGround() {
   }
   put(TILES.ruins, 760, LANES[0] - 190, 200); put(TILES.ruins, WORLD.w - 760, LANES[1] + 240, 200);
   // map edges: rocks + vignette
-  for (let x = 80; x < WORLD.w; x += 260 + rnd() * 120) { put(TILES.rock, x, 70 + rnd() * 30, 170); put(TILES.rock, x + 90, WORLD.h - 6 - rnd() * 20, 180); }
+  if (!TILES.painting) for (let x = 80; x < WORLD.w; x += 260 + rnd() * 120) { put(TILES.rock, x, 70 + rnd() * 30, 170); put(TILES.rock, x + 90, WORLD.h - 6 - rnd() * 20, 180); }
   g.globalCompositeOperation = 'multiply';
   const vg = g.createRadialGradient(WORLD.w / 2, WORLD.h / 2, WORLD.h * 0.48, WORLD.w / 2, WORLD.h / 2, WORLD.w * 0.58);
   vg.addColorStop(0, '#ffffff'); vg.addColorStop(1, '#39415a');
@@ -1224,6 +1224,15 @@ function drawLiveMap() {
       cx.drawImage(TILES.bones, -75, -75, 150, 150); cx.restore();
     }
     if (bx2 < -80 || by2 < -80 || bx2 > VW + 80 || by2 > VH + 80) continue;
+    const flSheet = FX['fx_hit_ember'];
+    const flS = flSheet && feathered(flSheet, 'fx_hit_ember');
+    if (flS) {
+      const fi2 = Math.floor(time * 14 + c.x) % flSheet.n;
+      cx.save(); cx.globalCompositeOperation = 'lighter'; cx.globalAlpha = 0.85;
+      cx.translate(bx2, by2 - 26 * ZOOM); cx.scale(ZOOM, ZOOM); cx.rotate(Math.sin(time * 3 + c.y) * 0.06);
+      cx.drawImage(flS, fi2 * flSheet.fw, 0, flSheet.fw, flSheet.fh, -46, -60, 92, 92);
+      cx.restore();
+    }
     const fl = 0.5 + 0.5 * Math.sin(time * 9 + c.x);
     const g3 = cx.createRadialGradient(bx2, by2, 2, bx2, by2, (46 + 14 * fl) * ZOOM);
     g3.addColorStop(0, 'rgba(255,170,70,' + (0.28 + 0.18 * fl) + ')'); g3.addColorStop(1, 'rgba(255,120,40,0)');
@@ -1350,8 +1359,8 @@ function drawUnit(u) {
   cx.save();
   cx.translate(sx, sy + size * 0.30 * ZOOM);
   cx.scale(ZOOM, ZOOM);
-  cx.fillStyle = 'rgba(0,0,0,0.38)';
-  cx.beginPath(); cx.ellipse(0, 0, size * 0.34, size * 0.13, 0, 0, TAU); cx.fill();
+  cx.fillStyle = 'rgba(0,0,0,0.52)';
+  cx.beginPath(); cx.ellipse(0, 2, size * 0.40, size * 0.15, 0, 0, TAU); cx.fill();
   cx.strokeStyle = 'rgba(' + TEAM[u.team].rgb + ',' + (u.kind === 'hero' ? 0.95 : 0.75) + ')';
   cx.lineWidth = u.kind === 'hero' ? 2.4 : 1.3;
   cx.beginPath(); cx.ellipse(0, 0, size * 0.36, size * 0.14, 0, 0, TAU); cx.stroke();
@@ -1526,7 +1535,7 @@ function drawFxAll() {
       const fs2 = Math.round((f.amt >= 100 ? 23 : 17) * ZOOM);
       cx.font = '700 ' + fs2 + 'px Rajdhani, sans-serif';
       cx.textAlign = 'center';
-      cx.lineWidth = 3; cx.strokeStyle = 'rgba(0,0,0,' + (0.85 * a) + ')';
+      cx.lineWidth = 4; cx.strokeStyle = 'rgba(0,0,0,' + (0.95 * a) + ')';
       cx.strokeText(String(f.amt), sx, sy);
       cx.fillStyle = 'rgba(' + f.c + ',' + a + ')';
       cx.fillText(String(f.amt), sx, sy);
