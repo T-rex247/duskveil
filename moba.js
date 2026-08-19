@@ -381,6 +381,8 @@ function dealDamage(t, amt, src) {
   if (t.sh > 0) { const a = Math.min(t.sh, amt); t.sh -= a; amt -= a; }
   t.hp -= amt; t.hitT = time;
   if (t.kind === 'hero' && src && src.kind) { t.lastHitBy = src; t.lastHitAt = time; }
+  t._flinch = time;                                        // on-hit flinch (motion spec §4)
+  if (t.kind === 'hero' && amt > t.maxHp * 0.06) hitstop = Math.max(hitstop, 0.05);   // brief hitstop on a big hit
   const okNum = !t._dmgAt || time - t._dmgAt > 0.18; if (okNum) t._dmgAt = time;
   if (amt >= 1 && okNum) {
     t._dmgSlot = ((t._dmgSlot || 0) + 1) % 3;
