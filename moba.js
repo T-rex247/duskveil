@@ -242,7 +242,7 @@ function sellItem(u, idx) {
 
 /* ============================ entities ============================ */
 let units = [], towers = [], fx = [], beams = [], corpses = [], telegraphs = [];
-let eid = 0, time = 0, over = false, started = false;
+let eid = 0, time = 0, over = false, started = false, hitstop = 0;
 let player = null, heroes = [], kills = 0, deaths = 0, gold = 0;
 let waveT = 5, buffMsgT = 0;
 
@@ -1403,11 +1403,15 @@ function drawSheet(u, sheet, size, hFlip, alpha) {
   }
   const castAge = time - (u.castT || -9);
   if (castAge >= 0 && castAge < 0.32) { const cs = Math.sin(castAge / 0.32 * Math.PI); cx.translate(0, -5 * cs * ZOOM); cx.scale(1 + 0.07 * cs, 1 + 0.07 * cs); }
-  const lean = clamp(Math.sin(u.face) * 0.18, -0.22, 0.22);
-  cx.rotate(u.moving ? lean : Math.cos(u.face) * -0.10);                        // face the fight even when planted
+  if (u.vFace === undefined) u.vFace = u.face;
+  let dfc = u.face - u.vFace; while (dfc > Math.PI) dfc -= TAU; while (dfc < -Math.PI) dfc += TAU;
+  u.vFace += dfc * 0.22;
+  const lean = clamp(Math.sin(u.vFace) * 0.18, -0.22, 0.22);
+  cx.rotate(u.moving ? lean : Math.cos(u.vFace) * -0.10);
   if (hFlip) cx.scale(-1, 1);
-  // hit flash pop
   const hitAge = time - u.hitT;
+  const flAge = time - (u._flinch || -9);
+  if (flAge >= 0 && flAge < 0.12) cx.translate(-Math.cos(u.face) * 3 * (1 - flAge / 0.12) * ZOOM, -Math.sin(u.face) * 3 * (1 - flAge / 0.12) * ZOOM);
   const pop = hitAge < 0.22 ? 1 + 0.08 * (1 - hitAge / 0.22) : 1;
   cx.scale(pop, pop);
   cx.drawImage(sheet.img, fi * sheet.fw, 0, sheet.fw, sheet.fh, -size / 2, -size / 2, size, size);
@@ -1740,9 +1744,10 @@ let last = 0, acc = 0;
 function frame(ts) {
   requestAnimationFrame(frame);
   if (!started) return;
-  const dt = Math.min(0.05, (ts - last) / 1000 || 0.016);
+  let dt = Math.min(0.05, (ts - last) / 1000 || 0.016);
   last = ts;
   if (!over) {
+    if (hitstop > 0) { hitstop = Math.max(0, hitstop - dt); dt *= 0.15; }
     time += dt;
     if (NET.guest) netLerp(dt); else {
     waveT -= dt;
