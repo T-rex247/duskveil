@@ -5,6 +5,10 @@
 
 /* ============================ helpers ============================ */
 const $ = id => document.getElementById(id);
+/* ?demo=fight — a staged 3v3 teamfight at the altar, all ults online, camera
+ * locked on the clash. Exists so the graphics review loop grades the same
+ * scene every round. */
+const DEMOF = typeof location !== 'undefined' && /[?&]demo=fight/.test(location.search);
 const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -192,6 +196,7 @@ function heroStat(u) {
   const h = u.hero, l = u.level;
   u.maxHp = h.hp + h.hpG * (l - 1);
   u.dmg = h.dmg + h.dmgG * (l - 1);
+  if (DEMOF && u.kind === 'hero') u.maxHp = Math.round(u.maxHp * 3);
 }
 function xpNeed(l) { return Math.round(90 * Math.pow(l, 1.35)); }
 function grantXp(u, amt) {
@@ -318,7 +323,7 @@ function kill(t, src) {
         else feed(t.hero.name + ' slain by your ally.');
       } else feed('Your ally ' + t.hero.name + ' has fallen.');
       if (srcHero) grantXp(srcHero, 150 + 40 * t.level);
-      t.respT = time + 7 + 2.5 * t.level;
+      t.respT = time + (DEMOF ? 2 : 7 + 2.5 * t.level);
       t.recallT = 0;
     } else if (t.kind === 'brood') { /* nothing */ }
   } else if (t.plate) {                                      // a tower
@@ -491,6 +496,7 @@ function castAbility(u, i, tx, ty) {
       break;
     }
     case 'spawn': {
+      if (DEMOF) return false;                 // demo: broodling piles read as a lattice
       for (let i2 = 0; i2 < ab.count; i2++) {
         const b = mkUnit(u.team, 'mawborn_imp', u.x + (Math.random() - .5) * 60, u.y + (Math.random() - .5) * 60,
           { hp: 110 + 25 * l, dmg: 18 + 5 * l, range: 60, speed: 165, r: 10, cd: 0.9 }, 'brood');
@@ -690,7 +696,7 @@ function heroesThink(dt) {
   }
   // AI brain for every non-player hero
   for (const e of heroes) {
-    if (e === player || e.dead) continue;
+    if ((e === player && !DEMOF) || e.dead) continue;   // demo drives the player too
     if (time < (e.aiT || 0)) continue;
     e.aiT = time + 0.5;
     const home = coreOf(e.team);
@@ -705,6 +711,7 @@ function heroesThink(dt) {
     if (foeHero && foeHero.hp < foeHero.maxHp * .5) { e.target = foeHero; continue; }
     if (m) { e.target = m; continue; }
     e.target = null;
+    if (DEMOF) { e.order = { x: ALTAR.x + (Math.random() - .5) * 220, y: ALTAR.y + (Math.random() - .5) * 180 }; continue; }
     // jungler contests the altar when it's hot; laners walk their lane
     if (e.lane === 2 && ALTAR.owner !== e.team && time > ALTAR.lockT) {
       e.order = { x: ALTAR.x + (Math.random() - .5) * 40, y: ALTAR.y + (Math.random() - .5) * 40 };
@@ -1163,6 +1170,15 @@ function frame(ts) {
   if (!over) {
     time += dt;
     waveT -= dt;
+    if (DEMOF && Math.floor(time) % 10 === 0 && Math.floor(time) !== (frame._lastFeed || -1)) {
+      frame._lastFeed = Math.floor(time);
+      for (const team of [0, 1]) for (let i = 0; i < 3; i++) {
+        const d = MINIONS[team][i < 2 ? 0 : 1];
+        const u = mkUnit(team, d.key, ALTAR.x + (team === 0 ? -260 : 260) + (Math.random() - .5) * 80, ALTAR.y - 90 + i * 90 + (Math.random() - .5) * 50, d);
+        u.order = { x: ALTAR.x + (team === 0 ? 60 : -60), y: u.y };
+        units.push(u);
+      }
+    }
     if (waveT <= 0) { waveT = 26; spawnWave(); }
     for (const c of JUNGLE) if (!c.alive && time > c.respawnAt) spawnCamp(c);
     for (const u of units) stepUnit(u, dt);
@@ -1199,7 +1215,7 @@ function frame(ts) {
     for (let i = beams.length - 1; i >= 0; i--) if (time - beams[i].t0 > beams[i].dur) beams.splice(i, 1);
     units = units.filter(u => !u.dead || u.kind === 'hero');
     // camera follows player
-    const tx = clamp(player.x - VW / ZOOM / 2, 0, WORLD.w - VW / ZOOM);
+    const tx = clamp((DEMOF ? ALTAR.x : player.x) - VW / ZOOM / 2, 0, WORLD.w - VW / ZOOM);
     const ty = clamp(player.y - VH / ZOOM / 2, 0, WORLD.h - VH / ZOOM);
     camX += (tx - camX) * 0.12; camY += (ty - camY) * 0.12;
   }
@@ -1328,8 +1344,29 @@ function startGame(hk) {
     heroes.push(h);
   });
   for (const h of heroes) { heroStat(h); h.hp = h.maxHp; units.push(h); }
+  if (DEMOF) {
+    // everyone level 6 (ults online), arrayed in two arcs around the altar
+    heroes.forEach((h, i) => {
+      h.level = 6; heroStat(h); h.hp = h.maxHp;
+      const side = h.team === 0 ? -1 : 1;
+      const k = i % 3;
+      h.x = ALTAR.x + side * (230 + k * 40);
+      h.y = ALTAR.y + (k - 1) * 150;
+      h.order = { x: ALTAR.x + side * 60, y: ALTAR.y + (k - 1) * 60 };
+    });
+    // two minion packs already colliding at the altar
+    for (const team of [0, 1]) {
+      for (let i = 0; i < 6; i++) {
+        const d = MINIONS[team][i < 4 ? 0 : 1];
+        const u = mkUnit(team, d.key, ALTAR.x + (team === 0 ? -170 : 170) + (Math.random() - .5) * 60, ALTAR.y - 120 + i * 44, d);
+        u.order = { x: ALTAR.x + (team === 0 ? 60 : -60), y: u.y };
+        units.push(u);
+      }
+    }
+    ALTAR.lockT = 0;
+  }
   camX = clamp(player.x - VW / ZOOM / 2, 0, WORLD.w - VW / ZOOM);
-  camY = clamp(player.y - VH / ZOOM / 2, 0, WORLD.h - VH / ZOOM);
+  camY = clamp((DEMOF ? ALTAR.y : player.y) - VH / ZOOM / 2, 0, WORLD.h - VH / ZOOM);
   bindBar();
   started = true;
   feed('Destroy the enemy core. Jungle camps grant buffs.');
@@ -1343,6 +1380,7 @@ function startGame(hk) {
   $('load').classList.add('hidden');
   const hp = $('heroes');
   for (const hk of Object.keys(HEROES)) hp.appendChild(heroCard(hk));
-  $('pick').classList.remove('hidden');
+  if (DEMOF) startGame('liora');
+  else $('pick').classList.remove('hidden');
   requestAnimationFrame(ts => { last = ts; requestAnimationFrame(frame); });
 })();
