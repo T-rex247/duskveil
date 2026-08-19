@@ -255,7 +255,7 @@ function mkHero(team, hkey, x, y) {
 }
 function heroStat(u) {
   const h = u.hero, l = u.level;
-  u.maxHp = h.hp + h.hpG * (l - 1) + itemStat(u, 'hp');
+  u.maxHp = Math.round((h.hp + h.hpG * (l - 1)) * 1.45) + itemStat(u, 'hp');
   u.dmg = h.dmg + h.dmgG * (l - 1);
   if (DEMOF) u.maxHp = Math.round(u.maxHp * (u.kind === 'hero' ? (u === player ? 14 : 8) : 3));
 }
@@ -415,7 +415,7 @@ function kill(t, src) {
         else feed(t.hero.name + ' slain by your ally.');
       } else feed('Your ally ' + t.hero.name + ' has fallen.');
       if (srcHero) grantXp(srcHero, 150 + 40 * t.level);
-      t.respT = time + (DEMOF ? 1.5 : 7 + 2.5 * t.level);
+      t.respT = time + (DEMOF ? 1.5 : 4 + 1.5 * t.level);
       t.recallT = 0;
     } else if (t.kind === 'brood') { /* nothing */ }
   } else if (t.plate) {                                      // a tower
@@ -837,7 +837,8 @@ function heroesThink(dt) {
     }
     if (!h.dead) {
       const nearCore = dist(h, coreOf(h.team)) < 320;
-      const regen = nearCore ? h.maxHp * .06 : (h.buff === 'WARDLIGHT' ? 8 : 1.6);
+      const inCombat = time - (h.hitT || -9) < 6;
+      const regen = nearCore ? h.maxHp * .06 : (h.buff === 'WARDLIGHT' ? 8 : (inCombat ? 1.6 : h.maxHp * 0.008));
       h.hp = Math.min(h.maxHp, h.hp + regen * dt);
       if (h.buffT && time > h.buffT) h.buff = null;
     }
