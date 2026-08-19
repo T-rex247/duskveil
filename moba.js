@@ -47,7 +47,7 @@ const TEAM = [
 const ANIMS = {};           // key -> {idle:{img,n,fw,fh,fps}, walk, attack}
 const FX = {};              // fxkey -> sheet
 const PLATES = {};          // plate key -> img
-const UNIT_SHEETS = ['dawnmarch_corwen', 'dawnmarch_liora', 'dawnmarch_squire', 'dawnmarch_sunbow',
+const UNIT_SHEETS = ['vectra_sovereign', 'dawnmarch_corwen', 'dawnmarch_liora', 'dawnmarch_squire', 'dawnmarch_sunbow',
   'vectra_bastille', 'mawborn_ravener', 'mawborn_cinderling', 'mawborn_imp', 'mawborn_fiend', 'mawborn_pitbrute'];
 const FX_SHEETS = ['fx_hit_gold', 'fx_hit_cyan', 'fx_hit_ember', 'fx_muzzle_gold', 'fx_muzzle_cyan', 'fx_muzzle_ember',
   'fx_death_dawnmarch', 'fx_death_vectra', 'fx_death_mawborn', 'fx_proj_lightarrow', 'fx_proj_ionbolt_v3',
@@ -169,6 +169,17 @@ const HEROES = {
       { k: 'W', name: 'ROCKETS', icon: '♨', type: 'aoe', cd: 10, range: 540, radius: 140, delay: 0.5, dmg: l => 100 + 34 * l },
       { k: 'E', name: 'OVERDRIVE', icon: '⏩', type: 'haste', cd: 12, dur: 3.5, haste: 1.45 },
       { k: 'R', name: 'BARRAGE', icon: '☠', type: 'barrage', cd: 65, range: 700, radius: 250, shells: 7, dmg: l => 95 + 45 * l, ult: true },
+    ],
+  },
+  sovereign: {
+    key: 'vectra_sovereign', name: 'SOVEREIGN', role: 'SKY DREADNOUGHT', fac: 'vectra', icon: '⚓',
+    desc: 'A VECTRA capital ship answering the front in person. Broadsides, a point-defense screen, an overdrive ram — and a spinal lance that splits the field.',
+    hp: 940, hpG: 105, dmg: 58, dmgG: 8, range: 340, cd: 1.1, speed: 132, r: 24,
+    abilities: [
+      { k: 'Q', name: 'BROADSIDE', icon: '◫', type: 'burst', cd: 7, range: 520, shots: 6, dmg: l => 30 + 12 * l },
+      { k: 'W', name: 'AEGIS SCREEN', icon: '⬡', type: 'shield', cd: 13, dur: 3.5, amount: l => 180 + 60 * l },
+      { k: 'E', name: 'OVERDRIVE RAM', icon: '⏩', type: 'dash', cd: 11, range: 340, radius: 130, dmg: l => 70 + 26 * l },
+      { k: 'R', name: 'YAMATO LANCE', icon: '☄', type: 'beam', cd: 75, range: 820, width: 120, dmg: l => 300 + 120 * l, ult: true },
     ],
   },
   ravener: {
@@ -626,7 +637,7 @@ function castAbility(u, i, tx, ty, force) {
     }
     case 'beam': {
       u.face = ang;
-      beams.push({ x: u.x, y: u.y, ang, len: ab.range, w: ab.width, t0: time, dur: .5, c: '#ffe9a8' });
+      beams.push({ x: u.x, y: u.y, ang, len: ab.range, w: ab.width, t0: time, dur: .5, c: 'rgb(' + lrgb + ')' });
       sheetFx('fx_ability_finallight', { x: u.x, y: u.y, size: 140 });
       const ex = u.x + Math.cos(ang) * ab.range, ey = u.y + Math.sin(ang) * ab.range;
       sparks(ex, ey, ang, lrgb, 1.8);
