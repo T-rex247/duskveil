@@ -899,7 +899,7 @@ function orderFor(player, x, y) {
   // attack if clicking near an enemy
   let best = null, bd = 60;
   for (const t of units) {
-    if (t.dead || t.team === player.team) continue;
+    if (t.dead || t.team === player.team || !isVisible(t)) continue;
     const d = Math.hypot(t.x - x, t.y - y);
     if (d < bd) { bd = d; best = t; }
   }
@@ -1160,6 +1160,73 @@ function drawLiveMap() {
   cx.restore();
 }
 
+/* League fog of war + brush. Sight: heroes 500, minions 340, towers 520.
+ * An enemy in brush is hidden unless an ally shares that brush (League rule). */
+const FOG_ON = !DEMOF;
+const BRUSH = [
+  { x: 780, y: 700, rx: 150, ry: 68 }, { x: 780, y: 1210, rx: 150, ry: 68 },
+  { x: 2220, y: 700, rx: 150, ry: 68 }, { x: 2220, y: 1210, rx: 150, ry: 68 },
+  { x: 1500, y: 480, rx: 170, ry: 62 }, { x: 1500, y: 1430, rx: 170, ry: 62 },
+];
+function brushOf(u) { for (let i = 0; i < BRUSH.length; i++) { const b = BRUSH[i]; const dx = (u.x - b.x) / b.rx, dy = (u.y - b.y) / b.ry; if (dx * dx + dy * dy < 1) return i; } return -1; }
+function sightSources() {
+  const out = [];
+  for (const u of units) if (!u.dead && u.team === 0) out.push({ x: u.x, y: u.y, r: u.kind === 'hero' ? 500 : 340, b: brushOf(u) });
+  for (const tw of towers) if (tw.hp > 0 && tw.team === 0) out.push({ x: tw.x, y: tw.y, r: 520, b: -1 });
+  return out;
+}
+let _srcCache = [], _srcT = -1;
+function isVisible(u) {
+  if (!FOG_ON || u.team === 0) return true;
+  if (_srcT !== time) { _srcCache = sightSources(); _srcT = time; }
+  const ub = brushOf(u);
+  for (const sSrc of _srcCache) {
+    const d = Math.hypot(u.x - sSrc.x, u.y - sSrc.y);
+    if (d > sSrc.r) continue;
+    if (ub >= 0 && sSrc.b !== ub && d > 70) continue;   // brush hides unless shared (or point-blank)
+    return true;
+  }
+  return false;
+}
+const fogCv = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+function drawFog() {
+  if (!FOG_ON || !fogCv) return;
+  const S = 8, fw = Math.ceil(WORLD.w / S), fh = Math.ceil(WORLD.h / S);
+  if (fogCv.width !== fw) { fogCv.width = fw; fogCv.height = fh; }
+  const g = fogCv.getContext('2d');
+  g.globalCompositeOperation = 'source-over';
+  g.fillStyle = 'rgba(6,8,14,0.62)';
+  g.clearRect(0, 0, fw, fh); g.fillRect(0, 0, fw, fh);
+  g.globalCompositeOperation = 'destination-out';
+  if (_srcT !== time) { _srcCache = sightSources(); _srcT = time; }
+  for (const sSrc of _srcCache) {
+    const rr = sSrc.r / S;
+    const rg = g.createRadialGradient(sSrc.x / S, sSrc.y / S, rr * 0.55, sSrc.x / S, sSrc.y / S, rr);
+    rg.addColorStop(0, 'rgba(0,0,0,1)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = rg;
+    g.beginPath(); g.arc(sSrc.x / S, sSrc.y / S, rr, 0, TAU); g.fill();
+  }
+  cx.drawImage(fogCv, camX / S, camY / S, VW / ZOOM / S, VH / ZOOM / S, 0, 0, VW, VH);
+}
+function drawBrush() {
+  if (DEMOF) return;
+  cx.save();
+  for (const b of BRUSH) {
+    const bx = (b.x - camX) * ZOOM, by = (b.y - camY) * ZOOM;
+    if (bx < -260 || by < -160 || bx > VW + 260 || by > VH + 160) continue;
+    const inIt = player && !player.dead && brushOf(player) === BRUSH.indexOf(b);
+    cx.globalAlpha = inIt ? 0.16 : 0.30;
+    cx.fillStyle = '#223d1e';
+    cx.beginPath(); cx.ellipse(bx, by, b.rx * ZOOM, b.ry * ZOOM, 0, 0, TAU); cx.fill();
+    cx.globalAlpha = inIt ? 0.3 : 0.5;
+    cx.strokeStyle = 'rgba(120,180,90,0.5)'; cx.lineWidth = 1.5;
+    cx.setLineDash([8, 10]);
+    cx.beginPath(); cx.ellipse(bx, by, b.rx * ZOOM, b.ry * ZOOM, 0, 0, TAU); cx.stroke();
+    cx.setLineDash([]);
+  }
+  cx.restore();
+}
+
 /* ============================ render ============================ */
 function drawSheet(u, sheet, size, hFlip, alpha) {
   const n = sheet.n;
@@ -1414,7 +1481,7 @@ function drawMinimap() {
     g.fillRect(tw.x * sx - 3, tw.y * sy - 3, tw.core ? 8 : 5, tw.core ? 8 : 5);
   }
   for (const u of units) {
-    if (u.dead) continue;
+    if (u.dead || !isVisible(u)) continue;
     g.fillStyle = u.team === 0 ? '#8ec2ff' : u.team === 1 ? '#ff9c8a' : '#c9b37e';
     const s = u.kind === 'hero' ? 5 : 3;
     g.fillRect(u.x * sx - s / 2, u.y * sy - s / 2, s, s);
@@ -1550,11 +1617,13 @@ function frame(ts) {
     }
     cx.restore();
   }
+  drawBrush();
   for (const tw of towers) drawTower(tw);
   const zs = units.slice().sort((a, b) => (a.kind === 'hero' ? 1 : 0) - (b.kind === 'hero' ? 1 : 0) || a.y - b.y);
-  for (const u of zs) if (!u.dead) drawUnit(u);
+  for (const u of zs) if (!u.dead && isVisible(u)) drawUnit(u);
   drawFxAll();
   cx.restore();
+  drawFog();
   // vignette
   const vg = cx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * .45, VW / 2, VH / 2, Math.max(VW, VH) * .75);
   vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.42)');
