@@ -1136,7 +1136,7 @@ function drawLiveMap() {
   const ax = (ALTAR.x - camX) * ZOOM, ay = (ALTAR.y - camY) * ZOOM;
   cx.save(); cx.globalCompositeOperation = 'lighter';
   const g2 = cx.createRadialGradient(ax, ay, 8 * ZOOM, ax, ay, (120 + 26 * pulse) * ZOOM);
-  g2.addColorStop(0, 'rgba(120,235,255,' + (0.20 + 0.12 * pulse) + ')'); g2.addColorStop(1, 'rgba(120,235,255,0)');
+  g2.addColorStop(0, 'rgba(120,235,255,' + (0.11 + 0.06 * pulse) + ')'); g2.addColorStop(1, 'rgba(120,235,255,0)');
   cx.fillStyle = g2; cx.fillRect(ax - 160 * ZOOM, ay - 160 * ZOOM, 320 * ZOOM, 320 * ZOOM);
   cx.strokeStyle = 'rgba(150,240,255,' + (0.22 + 0.2 * pulse) + ')'; cx.lineWidth = 2 * ZOOM;
   cx.setLineDash([14 * ZOOM, 20 * ZOOM]); cx.lineDashOffset = -time * 30 * ZOOM;
@@ -1243,7 +1243,7 @@ function drawUnit(u) {
     cx.fillStyle = 'rgba(0,0,0,0.82)'; cx.fillRect(bx - 1, by - 1, w + 2, h + 2);
     const f = clamp(u.hp / u.maxHp, 0, 1);
     cx.fillStyle = u.team === 0 ? '#5aa2ff' : u.team === 1 ? '#ff5a5a' : '#c9b37e';
-    if (u.kind === 'hero') cx.fillStyle = u.team === 0 ? (f > .55 ? '#5fd75f' : f > .28 ? '#e8c34a' : '#e85454') : '#ff5a5a';
+    if (u.kind === 'hero') cx.fillStyle = u === player ? (f > .55 ? '#5fd75f' : f > .28 ? '#e8c34a' : '#e85454') : u.team === 0 ? '#4f8fe8' : '#ff5a5a';
     cx.fillRect(bx, by, w * f, h);
     cx.fillStyle = 'rgba(255,255,255,0.3)'; cx.fillRect(bx, by, w * f, 1);
     if (u.sh > 0) { cx.fillStyle = 'rgba(255,240,180,0.9)'; cx.fillRect(bx, by - 2, w * clamp(u.sh / u.maxHp, 0, 1), 2); }
