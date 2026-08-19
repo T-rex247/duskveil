@@ -197,6 +197,38 @@ const JUNGLE = [
  * EMBERBRAND + gold. The 3v3 map's reason to fight in the jungle. */
 const ALTAR = { x: 1500, y: 950, r: 90, prog: 0, owner: -1, lockT: 0 };
 
+/* Shop items — League archetypes, original names. Bought at your own core. */
+const ITEMS = [
+  { id: 'blade',   n: 'Pilgrim Blade',    cost: 350,  ic: '🗡', ad: 10,                     d: '+10 attack damage' },
+  { id: 'charm',   n: 'Ember Charm',      cost: 350,  ic: '🔥', hp: 80,                     d: '+80 max health' },
+  { id: 'boots',   n: 'Duskstriders',     cost: 300,  ic: '🥾', ms: 25,                     d: '+25 move speed' },
+  { id: 'sigil',   n: 'Storm Sigil',      cost: 800,  ic: '⚡', cdr: 0.1,                   d: '10% cooldown reduction' },
+  { id: 'fang',    n: 'Ravener Fang',     cost: 900,  ic: '🩸', ad: 15, ls: 0.12,           d: '+15 AD · 12% lifesteal' },
+  { id: 'aegisp',  n: 'Aegis Plate',      cost: 1000, ic: '🛡', hp: 220,                    d: '+220 max health' },
+  { id: 'edge',    n: 'Dawnforged Edge',  cost: 1600, ic: '⚔', ad: 35,                     d: '+35 attack damage' },
+  { id: 'crown',   n: 'Veilpiercer Crown',cost: 2200, ic: '👑', ad: 25, cdr: 0.15, hp: 150, d: '+25 AD · 15% CDR · +150 HP' },
+  { id: 'heart',   n: 'Pit Heart',        cost: 2400, ic: '💗', hp: 450,                    d: '+450 max health' },
+  { id: 'reaver',  n: 'Final Reaver',     cost: 3000, ic: '☄', ad: 55, ls: 0.18,           d: '+55 AD · 18% lifesteal' },
+];
+function itemStat(u, k) { let v = 0; for (const id of (u.items || [])) { const it = ITEMS.find(i => i.id === id); if (it && it[k]) v += it[k]; } return v; }
+function atShop(u) { const c = coreOf(u.team); return c && dist(u, c) < 420; }
+function buyItem(u, id) {
+  const it = ITEMS.find(i => i.id === id);
+  if (!it || (u.items || []).length >= 6 || !atShop(u) || u.dead) return false;
+  if (u === player) { if (gold < it.cost) return false; gold -= it.cost; }
+  u.items = u.items || []; u.items.push(id);
+  heroStat(u); u.hp = Math.min(u.maxHp, u.hp + (it.hp || 0));
+  fxPush({ kind: 'shock', x: u.x, y: u.y, life: .4, max: .4, r: 46, c: '255,217,138' });
+  if (u === player) { feed('Bought ' + it.n + '.'); paintShop(); }
+  return true;
+}
+function sellItem(u, idx) {
+  const id = (u.items || [])[idx]; if (id === undefined) return;
+  const it = ITEMS.find(i => i.id === id);
+  u.items.splice(idx, 1); heroStat(u);
+  if (u === player) { gold += Math.round(it.cost * 0.7); feed('Sold ' + it.n + ' (+' + Math.round(it.cost * 0.7) + 'g)'); paintShop(); }
+}
+
 /* ============================ entities ============================ */
 let units = [], towers = [], fx = [], beams = [], corpses = [], telegraphs = [];
 let eid = 0, time = 0, over = false, started = false;
@@ -223,7 +255,7 @@ function mkHero(team, hkey, x, y) {
 }
 function heroStat(u) {
   const h = u.hero, l = u.level;
-  u.maxHp = h.hp + h.hpG * (l - 1);
+  u.maxHp = h.hp + h.hpG * (l - 1) + itemStat(u, 'hp');
   u.dmg = h.dmg + h.dmgG * (l - 1);
   if (DEMOF) u.maxHp = Math.round(u.maxHp * (u.kind === 'hero' ? 8 : 3));
 }
@@ -326,7 +358,7 @@ function nearestTower(u, r) {
   return best;
 }
 function effDmg(u) {
-  let d = u.dmg;
+  let d = u.dmg + (u.kind === 'hero' ? itemStat(u, 'ad') : 0);
   if (u.buff === 'EMBERBRAND') d *= 1.25;
   return Math.round(d);
 }
@@ -400,7 +432,9 @@ function fireAt(u, t) {
   u.atkT = time; u.cdT = time + u.cd / (u.hasteT > time ? u.haste : 1);
   fireFx(u, t);
   if (NET.on && !NET.guest && NET.evq.length < 120) NET.evq.push(['atk', u.id, t.id]);
-  dealDamage(t, effDmg(u), u);
+  const _dm = effDmg(u);
+  dealDamage(t, _dm, u);
+  if (u.kind === 'hero') { const ls = itemStat(u, 'ls'); if (ls > 0) u.hp = Math.min(u.maxHp, u.hp + _dm * ls); }
 }
 function fireFx(u, t) {
   const fac = u.key.split('_')[0];
@@ -488,7 +522,7 @@ function castAbility(u, i, tx, ty, force) {
   u.castT = time; u.face = Math.atan2(ty - u.y, tx - u.x) || u.face;
   const l = u.level, fac = u.hero.fac;
   const lrgb = { dawnmarch: '255,233,168', vectra: '159,232,255', mawborn: '255,150,90' }[fac];
-  let cdMul = u.buff === 'WARDLIGHT' ? 0.8 : 1;
+  let cdMul = (u.buff === 'WARDLIGHT' ? 0.8 : 1) * (1 - Math.min(0.4, itemStat(u, 'cdr')));
   const ang = Math.atan2(ty - u.y, tx - u.x);
   const capTo = (r) => { const d = Math.hypot(tx - u.x, ty - u.y); if (d > r) { tx = u.x + (tx - u.x) / d * r; ty = u.y + (ty - u.y) / d * r; } };
   switch (ab.type) {
@@ -652,7 +686,7 @@ function stepUnit(u, dt) {
   if (u.dieAt && time > u.dieAt) { u.dead = true; boom(u); return; }
   if (u.shT && time > u.shT) u.sh = 0;
   if (u.hasteT && time < u.hasteT === false) u.haste = 1;
-  const sp = u.speed * (u.hasteT > time ? u.haste : 1) * (u.recallT ? 0 : 1);
+  const sp = (u.speed + (u.kind === 'hero' ? itemStat(u, 'ms') : 0)) * (u.hasteT > time ? u.haste : 1) * (u.recallT ? 0 : 1);
   if (u.kind === 'monster') {                                // leashed camp
     const t = heroes.find(h => !h.dead && dist(u, h) < 260) || null;
     if (t && dist(u, t.camp ? t : t) < 420) {
@@ -815,6 +849,11 @@ function heroesThink(dt) {
     if (time < (e.aiT || 0)) continue;
     e.aiT = time + 0.5;
     const home = coreOf(e.team);
+    if (!DEMOF && !e.human && e !== player && atShop(e) && Math.random() < 0.3) {
+      e.aiGold = (e.aiGold || 0) + 60 + time * 0.4;
+      const buyable = ITEMS.filter(i => i.cost <= e.aiGold && (e.items || []).length < 6);
+      if (buyable.length) { const it = buyable[buyable.length - 1]; e.aiGold -= it.cost; buyItem(e, it.id) || (e.items = e.items || [], e.items.push(it.id), heroStat(e)); }
+    }
     const low = !DEMOF && e.hp < e.maxHp * 0.32;
     if (low) { e.target = null; e.order = { x: home.x + (e.team === 0 ? 90 : -90), y: home.y }; continue; }
     const foeHero = heroes.find(h => !h.dead && h.team !== e.team && dist(e, h) < 520);
@@ -926,6 +965,7 @@ addEventListener('keydown', e => {
     else { player.recallT = time + 4; feed('Recalling…'); }
   }
   else if (k === 's') { if (NET.guest) netSend({ t: 'stop' }); player.order = null; player.target = null; }
+  else if (k === 'p' && !NET.guest) { const sh = $('shop'); if (sh && atShop(player)) { sh.classList.toggle('hidden'); if (!sh.classList.contains('hidden')) paintShop(); } }
 });
 
 /* mobile ability buttons cast at nearest enemy / self */
@@ -988,6 +1028,28 @@ function feed(t) {
   while (f.children.length > 3) f.removeChild(f.firstChild);
   setTimeout(() => { if (d.parentNode) d.parentNode.removeChild(d); }, DEMOF ? 3000 : 6000);
 }
+function paintShop() {
+  const sh = $('shop'); if (!sh) return;
+  const grid = $('shopGrid'); grid.innerHTML = '';
+  for (const it of ITEMS) {
+    const d = document.createElement('button');
+    d.className = 'shopIt' + (gold >= it.cost ? '' : ' poor');
+    d.innerHTML = '<span class="si">' + it.ic + '</span><span class="sn">' + it.n + '</span><span class="sd">' + it.d + '</span><span class="sc">' + it.cost + 'g</span>';
+    d.addEventListener('click', () => buyItem(player, it.id));
+    grid.appendChild(d);
+  }
+  const inv = $('shopInv'); inv.innerHTML = '';
+  (player.items || []).forEach((id, i) => {
+    const it = ITEMS.find(x => x.id === id);
+    const d = document.createElement('button');
+    d.className = 'shopIt own';
+    d.title = 'Sell for ' + Math.round(it.cost * 0.7) + 'g';
+    d.innerHTML = '<span class="si">' + it.ic + '</span><span class="sn">' + it.n + '</span><span class="sc">sell ' + Math.round(it.cost * 0.7) + 'g</span>';
+    d.addEventListener('click', () => sellItem(player, i));
+    inv.appendChild(d);
+  });
+  $('shopGold').textContent = gold + 'g';
+}
 function paintHud() {
   if (!player) return;
   if (time > 10 && Math.floor(time) !== paintHud._gs) { paintHud._gs = Math.floor(time); gold += 2; }
@@ -1005,7 +1067,18 @@ function paintHud() {
   $('lbHp').textContent = (player.dead ? 0 : Math.max(0, Math.round(player.hp))) + '/' + player.maxHp + (player.sh > 0 ? ' (+' + Math.round(player.sh) + ')' : '');
   $('lbBuff').textContent = (player.buff ? player.buff + ' ' : '') + (player.recallT ? 'RECALLING ' + Math.ceil(player.recallT - time) : '');
   $('xpin').style.width = (player.level >= 9 ? 100 : player.xp / xpNeed(player.level) * 100) + '%';
+  const shopBtn = $('bShop');
+  if (shopBtn) shopBtn.style.display = !NET.guest && atShop(player) && !player.dead ? 'inline-flex' : 'none';
+  if ($('shop') && !$('shop').classList.contains('hidden') && (!atShop(player) || player.dead)) $('shop').classList.add('hidden');
   $('statAD').textContent = effDmg(player); $('statMS').textContent = Math.round(player.speed * (player.hasteT > time ? player.haste : 1)); $('statGD').textContent = gold;
+  const strip = $('itemStrip');
+  if (strip) {
+    const ids = (player.items || []).join(',');
+    if (strip._ids !== ids) {
+      strip._ids = ids; strip.innerHTML = '';
+      for (const id of (player.items || [])) { const it = ITEMS.find(x => x.id === id); const sp2 = document.createElement('span'); sp2.className = 'itc'; sp2.title = it.n + ' — ' + it.d; sp2.textContent = it.ic; strip.appendChild(sp2); }
+    }
+  }
   paintBar();
 }
 

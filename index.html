@@ -106,6 +106,14 @@
     cursor:pointer; font-family:inherit; font-weight:600; font-size:12px; letter-spacing:.14em; transition:border-color .12s; }
   .btn2:hover, .btn2.on { border-color: var(--gold); color: var(--gold2); }
   .btn2.gold { background:linear-gradient(180deg,var(--gold2),var(--gold)); color:#201502; border:none; font-weight:700; }
+  .shopIt { display:flex; flex-direction:column; gap:2px; text-align:left; padding:10px; border-radius:10px;
+    border:1px solid var(--line); background:#0d1119; color:var(--ink); cursor:pointer; font-family:inherit; }
+  .shopIt:hover { border-color:var(--gold); }
+  .shopIt.poor { opacity:.45; }
+  .shopIt .si { font-size:20px; } .shopIt .sn { font-weight:700; font-size:13px; color:var(--gold2); }
+  .shopIt .sd { font-size:11px; color:var(--dim); } .shopIt .sc { font-size:12px; color:#ffd98a; font-weight:700; }
+  .shopIt.own { flex-direction:row; align-items:center; gap:8px; }
+  .itc { font-size:15px; margin-left:2px; cursor:default; }
   .hidden { display:none !important; }
 </style>
 </head>
@@ -131,11 +139,29 @@
   <div id="hpout"><div id="hpin"></div></div>
   <div id="xpout"><div id="xpin"></div></div>
   <div class="lb"><span id="lbHp">100/100</span><span id="lbBuff"></span>
-    <span style="color:#8a94a6">AD <b id="statAD" style="color:#ffd98a">0</b>&nbsp; MS <b id="statMS" style="color:#9fd6ff">0</b>&nbsp; <b id="statGD" style="color:#ffd98a">0</b>g</span></div>
+    <span id="itemStrip"></span><span style="color:#8a94a6">AD <b id="statAD" style="color:#ffd98a">0</b>&nbsp; MS <b id="statMS" style="color:#9fd6ff">0</b>&nbsp; <b id="statGD" style="color:#ffd98a">0</b>g</span></div>
   </div>
 </div>
 
 <div id="bar" class="hidden"></div>
+<button id="bShop" style="display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:170px;z-index:6;
+  align-items:center;gap:6px;padding:8px 18px;border-radius:999px;border:1px solid var(--gold);cursor:pointer;
+  background:linear-gradient(180deg,#1a1408,#0e0b05);color:var(--gold2);font-family:inherit;font-weight:700;
+  letter-spacing:.12em;font-size:12px;">🛒 SHOP (P)</button>
+<div id="shop" class="hidden" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:12;width:min(680px,94vw);
+  max-height:82vh;overflow-y:auto;background:linear-gradient(180deg,#141924f8,#0b0f16fb);border:1px solid var(--gold);
+  border-radius:16px;padding:18px;box-shadow:0 0 0 1px #000,0 20px 60px #000d;">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+    <span style="font-family:Cinzel,serif;font-weight:900;color:var(--gold);letter-spacing:.1em;">DUSKVEIL ARMORY</span>
+    <span id="shopGold" style="color:var(--gold2);font-weight:700;"></span>
+    <span style="flex:1"></span>
+    <button onclick="document.getElementById('shop').classList.add('hidden')"
+      style="background:none;border:1px solid var(--line);color:var(--ink);width:28px;height:28px;border-radius:6px;cursor:pointer;">✕</button>
+  </div>
+  <div id="shopGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;"></div>
+  <div style="margin:12px 0 6px;color:var(--dim);font-size:11px;letter-spacing:.2em;">YOUR ITEMS · click to sell (70%)</div>
+  <div id="shopInv" style="display:flex;flex-wrap:wrap;gap:8px;min-height:34px;"></div>
+</div>
 <canvas id="mm" class="hidden" width="400" height="224"></canvas>
 <div id="feed" class="hidden"></div>
 <div id="respawn" class="hidden" style="position:fixed;left:50%;top:44%;transform:translate(-50%,-50%);z-index:6;
