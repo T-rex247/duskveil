@@ -529,7 +529,24 @@ function castAbility(u, i, tx, ty, force) {
   if (!ab) return false;
   const need = ab.ult ? 6 : [1, 2, 3][i] || 1;
   if (u.dead) return false;
-  if (!force && (u.level < need || time < u.abCd[i])) return false;
+  // Lee Sin-style two-stage Q (from docs/LOL-ABILITY-STUDY.md): a landed ACID
+  // SPIT sigils the target for 3s — recasting Q dashes to it, cooldown-free.
+  const recast = u.hkey === 'ravener' && i === 0 && u.qMark && u.qMark.until > time && u.qMark.t && !u.qMark.t.dead;
+  if (!force && !recast && (u.level < need || time < u.abCd[i])) return false;
+  if (recast && !force) {
+    const t2 = u.qMark.t; u.qMark = null;
+    if (NET.on && !NET.guest && NET.evq.length < 120) NET.evq.push(['cast', u.id, 0, t2.x, t2.y]);
+    const ang2 = Math.atan2(t2.y - u.y, t2.x - u.x);
+    for (let g2 = 1; g2 <= 3; g2++) fxPush({ kind: 'ghost', key: u.key, x: lerp(u.x, t2.x, g2 / 4), y: lerp(u.y, t2.y, g2 / 4), face: ang2, life: .3, max: .3, size: 120 });
+    u.x = t2.x - Math.cos(ang2) * 46; u.y = t2.y - Math.sin(ang2) * 46;
+    u.face = ang2; u.order = null; u.castT = time; u.atkT = time;
+    dealDamage(t2, Math.round(POTQ(u) + 0.35 * (t2.maxHp - t2.hp)), u);
+    onAbilityHit(u, t2);
+    fxPush({ kind: 'shock', x: t2.x, y: t2.y, life: .4, max: .4, r: 70, c: '255,120,200' });
+    addShake(t2.x, t2.y, 7);
+    if (u === player) feed('SIGIL LUNGE — the mark is claimed.');
+    return true;
+  }
   if (NET.on && !NET.guest && NET.evq.length < 120) NET.evq.push(['cast', u.id, i, tx, ty]);
   u.castT = time; u.face = Math.atan2(ty - u.y, tx - u.x) || u.face;
   const l = u.level, fac = u.hero.fac;
@@ -703,6 +720,7 @@ function castAbility(u, i, tx, ty, force) {
   u.abCd[i] = time + ab.cd * cdMul;
   return true;
 }
+function POTQ(u) { return 55 + 18 * u.level; }
 /* League-study passives: called whenever a hero's ABILITY deals damage */
 function onAbilityHit(src, t) {
   if (!src || src.kind !== 'hero') return;
@@ -1448,6 +1466,7 @@ function drawUnit(u) {
     cx.fillRect(bx, by, w * f, h);
     cx.fillStyle = 'rgba(255,255,255,0.3)'; cx.fillRect(bx, by, w * f, 1);
     if (u.sh > 0) { cx.fillStyle = 'rgba(255,240,180,0.9)'; cx.fillRect(bx, by - 2, w * clamp(u.sh / u.maxHp, 0, 1), 2); }
+    if (u._sigil > time) { cx.fillStyle = 'rgba(255,120,200,0.95)'; cx.font = Math.round(13 * ZOOM) + 'px serif'; cx.textAlign = 'center'; cx.fillText('◈', sx - 14 * ZOOM, by - 14 * ZOOM); }
     if (u._brand > time) { cx.fillStyle = 'rgba(255,230,150,0.95)'; cx.font = Math.round(12 * ZOOM) + 'px serif'; cx.textAlign = 'center'; cx.fillText('✦', sx, by - 14 * ZOOM); }
     if (u._sw && u._sw.n > 0 && time > u._sw.im) { for (let pi = 0; pi < u._sw.n; pi++) { cx.fillStyle = 'rgba(255,120,200,0.9)'; cx.beginPath(); cx.arc(sx - 12 * ZOOM + pi * 12 * ZOOM, by - 8 * ZOOM, 2.6 * ZOOM, 0, TAU); cx.fill(); } }
     if (u.kind === 'hero' && u.team !== 0 && player && player.hkey === 'corwen' && player.level >= 6 && time >= player.abCd[3] && dist(player, u) < 420) {
@@ -1744,6 +1763,7 @@ function frame(ts) {
       if (hit) {
         dealDamage(hit, p.dmg, p.src);
         onAbilityHit(p.src, hit);
+        if (p.src && p.src.hkey === 'ravener') { p.src.qMark = { t: hit, until: time + 3 }; hit._sigil = time + 3; if (p.src === player) feed('Sigil planted — press Q again to LUNGE.'); }
         sparks(p.x, p.y, p.ang, p.c, 1.4);
         fxPush({ kind: 'shock', x: p.x, y: p.y, life: .3, max: .3, r: 34, c: p.c });
         projectiles.splice(i, 1);
