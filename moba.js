@@ -113,7 +113,7 @@ function feathered(sheet, key) {
   for (let i = 0; i < sheet.n; i++) {
     const cxm = i * sheet.fw + sheet.fw / 2, cym = sheet.fh / 2, r = Math.min(sheet.fw, sheet.fh) / 2;
     const rg = g.createRadialGradient(cxm, cym, r * 0.62, cxm, cym, r * 0.96);
-    rg.addColorStop(0, 'rgba(0,0,0,1)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+    rg.addColorStop(0, 'rgba(0,0,0,1)'); rg.addColorStop(0.7, 'rgba(0,0,0,0.85)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = rg; g.fillRect(i * sheet.fw, 0, sheet.fw, sheet.fh);
     // wide cells: the radial misses the horizontal edges — feather all four sides too
     const m = Math.round(sheet.fw * 0.10);
@@ -1350,7 +1350,7 @@ function drawFog() {
   if (fogCv.width !== fw) { fogCv.width = fw; fogCv.height = fh; }
   const g = fogCv.getContext('2d');
   g.globalCompositeOperation = 'source-over';
-  g.fillStyle = 'rgba(6,8,14,0.62)';
+  g.fillStyle = 'rgba(6,8,14,0.42)';
   g.clearRect(0, 0, fw, fh); g.fillRect(0, 0, fw, fh);
   g.globalCompositeOperation = 'destination-out';
   if (_srcT !== time) { _srcCache = sightSources(); _srcT = time; }
@@ -1454,29 +1454,7 @@ function drawUnit(u) {
     cx.restore();
   }
   u.moving = false;                                       // consumed by stepUnit next tick
-  if (u.kind === 'hero') {
-    // radial underglow in the hero's faction light — makes every champion pop (Tee)
-    cx.save(); cx.globalCompositeOperation = 'lighter';
-    const gl = cx.createRadialGradient(sx, sy, 4, sx, sy, size * 0.62 * ZOOM);
-    const lrgb2 = u === player ? '255,225,150' : TEAM[u.team].light;
-    gl.addColorStop(0, 'rgba(' + lrgb2 + ',0.30)'); gl.addColorStop(0.6, 'rgba(' + lrgb2 + ',0.10)'); gl.addColorStop(1, 'rgba(' + lrgb2 + ',0)');
-    cx.fillStyle = gl; cx.beginPath(); cx.arc(sx, sy, size * 0.62 * ZOOM, 0, TAU); cx.fill();
-    cx.restore();
-  }
   drawSheet(u, sheet, size, hFlip);
-  if (u.kind === 'hero') {
-    // rim-light silhouette pass: redraw the sheet edge-lit in the faction colour
-    const an2 = ANIMS[u.key]; const rs = an2 && (an2[(time - u.atkT < 0.4 && an2.attack) ? 'attack' : (an2.walk && false ? 'walk' : 'idle')] || an2.idle);
-    if (rs) {
-      const fi2 = Math.floor((time * rs.fps + u.vPhase * rs.n)) % rs.n;
-      cx.save(); cx.globalCompositeOperation = 'lighter'; cx.globalAlpha = 0.22 + 0.12 * Math.sin(time * 3 + u.vPhase * 6);
-      const lrgb3 = u === player ? '255,235,180' : TEAM[u.team].light;
-      cx.translate(sx, sy); cx.scale(ZOOM, ZOOM); if ((Math.cos(u.face) < 0)) cx.scale(-1, 1);
-      cx.drawImage(rs.img, fi2 * rs.fw, 0, rs.fw, rs.fh, -size / 2 - 1, -size / 2, size + 2, size);
-      cx.globalCompositeOperation = 'source-atop'; cx.fillStyle = 'rgba(' + lrgb3 + ',0.5)'; cx.fillRect(-size / 2, -size / 2, size, size);
-      cx.restore();
-    }
-  }
   // shield ring
   if (u.sh > 0) {
     cx.save(); cx.globalCompositeOperation = 'lighter';
