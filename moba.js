@@ -11,8 +11,12 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const TAU = Math.PI * 2;
 
 /* ============================ world ============================ */
-const WORLD = { w: 2600, h: 1400 };
-const LANE_Y = 700;
+/* 3v3 twin-lane arena (Twisted-Treeline-shaped, original): two lanes over a
+ * jungle midfield with a capturable central altar. */
+const WORLD = { w: 3000, h: 1900 };
+const LANES = [560, 1340];
+const MID_Y = 950;
+const LANE_Y = MID_Y;                    // base/core height
 const cv = $('cv'), cx = cv.getContext('2d');
 let VW = 0, VH = 0, DPR = 1, ZOOM = 1;
 let camX = 0, camY = 0, shake = 0, shakeT = 0;
@@ -154,14 +158,17 @@ const MINIONS = {
       { key: 'mawborn_imp', hp: 130, dmg: 22, range: 230, speed: 120, r: 11, cd: 1.2 }],
 };
 const JUNGLE = [
-  { x: 620, y: 300, big: false, buff: 'WARDLIGHT' }, { x: 620, y: 1100, big: false, buff: 'WARDLIGHT' },
-  { x: 1980, y: 300, big: true, buff: 'EMBERBRAND' }, { x: 1980, y: 1100, big: true, buff: 'EMBERBRAND' },
+  { x: 1000, y: 950, big: false, buff: 'WARDLIGHT' }, { x: 2000, y: 950, big: false, buff: 'WARDLIGHT' },
+  { x: 1500, y: 700, big: true, buff: 'EMBERBRAND' }, { x: 1500, y: 1210, big: true, buff: 'EMBERBRAND' },
 ];
+/* The ALTAR: hold the circle alone for 2.5 s to claim a 45 s team-wide
+ * EMBERBRAND + gold. The 3v3 map's reason to fight in the jungle. */
+const ALTAR = { x: 1500, y: 950, r: 90, prog: 0, owner: -1, lockT: 0 };
 
 /* ============================ entities ============================ */
 let units = [], towers = [], fx = [], beams = [], corpses = [], telegraphs = [];
 let eid = 0, time = 0, over = false, started = false;
-let player = null, foe = null, kills = 0, deaths = 0, gold = 0;
+let player = null, heroes = [], kills = 0, deaths = 0, gold = 0;
 let waveT = 5, buffMsgT = 0;
 
 function mkUnit(team, key, x, y, stats, kind) {
@@ -203,15 +210,24 @@ function grantXp(u, amt) {
 function stage() {
   units = []; towers = []; fx = []; beams = []; corpses = []; telegraphs = [];
   time = 0; over = false; waveT = 5; kills = 0; deaths = 0; gold = 0;
-  towers.push(
-    { id: eid++, team: 0, core: true, x: 190, y: LANE_Y, hp: 1900, maxHp: 1900, r: 66, range: 330, dmg: 62, cdT: 0, plate: 'keep', size: 240 },
-    { id: eid++, team: 0, x: 620, y: LANE_Y, hp: 1250, maxHp: 1250, r: 34, range: 300, dmg: 48, cdT: 0, plate: 'tower_d', size: 150 },
-    { id: eid++, team: 0, x: 1010, y: LANE_Y, hp: 1250, maxHp: 1250, r: 34, range: 300, dmg: 48, cdT: 0, plate: 'tower_d', size: 150 },
-    { id: eid++, team: 1, core: true, x: WORLD.w - 190, y: LANE_Y, hp: 1900, maxHp: 1900, r: 66, range: 330, dmg: 62, cdT: 0, plate: 'heart', size: 250 },
-    { id: eid++, team: 1, x: WORLD.w - 620, y: LANE_Y, hp: 1250, maxHp: 1250, r: 34, range: 300, dmg: 48, cdT: 0, plate: 'spire', size: 160 },
-    { id: eid++, team: 1, x: WORLD.w - 1010, y: LANE_Y, hp: 1250, maxHp: 1250, r: 34, range: 300, dmg: 48, cdT: 0, plate: 'spire', size: 160 },
-  );
+  ALTAR.prog = 0; ALTAR.owner = -1; ALTAR.lockT = 60; ALTAR.capTeam = -1;   // altar opens at 1:00
+  for (const team of [0, 1]) {
+    const M = x => team === 0 ? x : WORLD.w - x;
+    const pl = team === 0 ? 'tower_d' : 'spire', cr = team === 0 ? 'keep' : 'heart';
+    towers.push(
+      { id: eid++, team, core: true, x: M(210), y: MID_Y, hp: 2100, maxHp: 2100, r: 66, range: 340, dmg: 66, cdT: 0, plate: cr, size: 240 },
+      { id: eid++, team, inner: true, x: M(560), y: MID_Y, hp: 1350, maxHp: 1350, r: 34, range: 310, dmg: 52, cdT: 0, plate: pl, size: 150 },
+      { id: eid++, team, lane: 0, x: M(1020), y: LANES[0], hp: 1250, maxHp: 1250, r: 34, range: 300, dmg: 48, cdT: 0, plate: pl, size: 150 },
+      { id: eid++, team, lane: 1, x: M(1020), y: LANES[1], hp: 1250, maxHp: 1250, r: 34, range: 300, dmg: 48, cdT: 0, plate: pl, size: 150 },
+    );
+  }
   for (const c of JUNGLE) spawnCamp(c);
+}
+/* Lane waypoints from a team's base toward the enemy core along one lane. */
+function lanePath(team, lane) {
+  const y = LANES[lane];
+  if (team === 0) return [{ x: 760, y }, { x: 2240, y }, { x: 2440, y: MID_Y }, { x: 2700, y: MID_Y }];
+  return [{ x: 2240, y }, { x: 760, y }, { x: 560, y: MID_Y }, { x: 300, y: MID_Y }];
 }
 function spawnCamp(c) {
   const defs = c.big
@@ -228,13 +244,15 @@ function spawnCamp(c) {
 }
 function spawnWave() {
   for (const team of [0, 1]) {
-    const dir = team === 0 ? 1 : -1;
-    const x0 = team === 0 ? 320 : WORLD.w - 320;
-    for (let i = 0; i < 5; i++) {
-      const d = MINIONS[team][i < 3 ? 0 : 1];
-      const u = mkUnit(team, d.key, x0 + dir * (i % 3) * -40, LANE_Y - 60 + (i % 3) * 60, d);
-      u.order = { x: team === 0 ? WORLD.w - 240 : 240, y: LANE_Y };
-      units.push(u);
+    const x0 = team === 0 ? 380 : WORLD.w - 380;
+    for (const lane of [0, 1]) {
+      for (let i = 0; i < 4; i++) {
+        const d = MINIONS[team][i < 3 ? 0 : 1];
+        const u = mkUnit(team, d.key, x0 + (Math.random() - .5) * 50, MID_Y - 50 + i * 34, d);
+        u.path = lanePath(team, lane); u.wp = 0;
+        u.order = { ...u.path[0] };
+        units.push(u);
+      }
     }
   }
 }
@@ -283,7 +301,7 @@ function kill(t, src) {
     const srcHero = src && src.kind === 'hero' ? src : null;
     if (t.kind === 'minion') {
       if (srcHero) { if (srcHero === player) gold += 22; grantXp(srcHero, 30); }
-      for (const h of [player, foe]) if (h && !h.dead && h.team !== t.team && dist(h, t) < 550) grantXp(h, 14);
+      for (const h of heroes) if (!h.dead && h.team !== t.team && dist(h, t) < 550) grantXp(h, 14);
     } else if (t.kind === 'monster') {
       if (srcHero) {
         grantXp(srcHero, 70); if (srcHero === player) gold += 42;
@@ -295,7 +313,10 @@ function kill(t, src) {
       }
     } else if (t.kind === 'hero') {
       if (t === player) { deaths++; feed('You have fallen. Respawning…'); }
-      else { kills++; gold += 300; feed('Enemy legend slain. +300 gold'); }
+      else if (t.team === 1) {
+        if (src === player) { kills++; gold += 300; feed(t.hero.name + ' slain! +300 gold'); }
+        else feed(t.hero.name + ' slain by your ally.');
+      } else feed('Your ally ' + t.hero.name + ' has fallen.');
       if (srcHero) grantXp(srcHero, 150 + 40 * t.level);
       t.respT = time + 7 + 2.5 * t.level;
       t.recallT = 0;
@@ -305,7 +326,7 @@ function kill(t, src) {
     if (t.core) endGame(t.team !== 0);
     else feed(t.team === 1 ? 'Enemy tower destroyed! +150 gold' : 'Your tower has fallen.');
     if (t.team === 1) gold += 150;
-    for (const h of [player, foe]) if (h && h.team !== t.team) grantXp(h, 120);
+    for (const h of heroes) if (h.team !== t.team) grantXp(h, 120);
   }
 }
 
@@ -553,8 +574,7 @@ function stepUnit(u, dt) {
   if (u.hasteT && time < u.hasteT === false) u.haste = 1;
   const sp = u.speed * (u.hasteT > time ? u.haste : 1) * (u.recallT ? 0 : 1);
   if (u.kind === 'monster') {                                // leashed camp
-    const t = (player && !player.dead && dist(u, player) < 260) ? player :
-      (foe && !foe.dead && dist(u, foe) < 260) ? foe : null;
+    const t = heroes.find(h => !h.dead && dist(u, h) < 260) || null;
     if (t && dist(u, t.camp ? t : t) < 420) {
       if (dist(u, t) > u.range) moveToward(u, t.x, t.y, sp, dt);
       else if (time >= u.cdT) fireAt(u, t);
@@ -583,13 +603,18 @@ function stepUnit(u, dt) {
     return;
   }
   if (u.order) {
-    if (moveToward(u, u.order.x, u.order.y, sp, dt)) u.order = null;
+    if (moveToward(u, u.order.x, u.order.y, sp, dt)) {
+      if (u.path && u.wp < u.path.length - 1) { u.wp++; u.order = { ...u.path[u.wp] }; }
+      else u.order = null;
+    }
     if (u.kind !== 'hero') {
       const e = nearestEnemy(u, 260);
       if (e) u.target = e;
     }
   } else if (u.kind !== 'hero') {
-    const e = nearestEnemy(u, 300); if (e) u.target = e;
+    const e = nearestEnemy(u, 300);
+    if (e) u.target = e;
+    else if (u.path) u.order = { ...u.path[u.wp] };   // resume the lane after a fight
   }
 }
 function towerHit(u, tw) {
@@ -639,62 +664,87 @@ function towersThink(dt) {
     if (best) towerFire(tw, best.t);
   }
 }
+function coreOf(team) { return towers.find(t => t.core && t.team === team); }
 function heroesThink(dt) {
   // player recall
-  if (player.recallT) {
-    if (time >= player.recallT) {
-      player.recallT = 0;
-      const c = towers[0]; player.x = c.x + 80; player.y = c.y; player.order = null;
-      fxPush({ kind: 'shock', x: player.x, y: player.y, life: .5, max: .5, r: 60, c: '255,233,168' });
-    }
+  if (player.recallT && time >= player.recallT) {
+    player.recallT = 0;
+    const c = coreOf(0); player.x = c.x + 90; player.y = c.y; player.order = null;
+    fxPush({ kind: 'shock', x: player.x, y: player.y, life: .5, max: .5, r: 60, c: '255,233,168' });
   }
-  // respawn + regen
-  for (const h of [player, foe]) {
-    if (!h) continue;
+  // respawn + regen — every hero on the field
+  for (const h of heroes) {
     if (h.dead && time >= h.respT) {
       h.dead = false; h.hp = h.maxHp;
-      const c = towers[h.team === 0 ? 0 : 3];
-      h.x = c.x + (h.team === 0 ? 80 : -80); h.y = c.y; h.order = null; h.target = null;
+      const c = coreOf(h.team);
+      h.x = c.x + (h.team === 0 ? 90 : -90); h.y = c.y + (Math.random() - .5) * 80;
+      h.order = null; h.target = null;
       fxPush({ kind: 'shock', x: h.x, y: h.y, life: .5, max: .5, r: 70, c: TEAM[h.team].light });
     }
     if (!h.dead) {
-      const nearCore = dist(h, towers[h.team === 0 ? 0 : 3]) < 300;
-      let regen = nearCore ? h.maxHp * .06 : (h.buff === 'WARDLIGHT' ? 8 : 1.6);
+      const nearCore = dist(h, coreOf(h.team)) < 320;
+      const regen = nearCore ? h.maxHp * .06 : (h.buff === 'WARDLIGHT' ? 8 : 1.6);
       h.hp = Math.min(h.maxHp, h.hp + regen * dt);
       if (h.buffT && time > h.buffT) h.buff = null;
     }
   }
-  // enemy AI
-  const e = foe;
-  if (e && !e.dead) {
-    e.aiT = (e.aiT || 0);
-    if (time > e.aiT) {
-      e.aiT = time + 0.5;
-      const low = e.hp < e.maxHp * 0.32;
-      const myTower = towers[4].hp > 0 ? towers[4] : towers[3];
-      if (low) { e.target = null; e.order = { x: towers[3].x - 80, y: towers[3].y }; }
-      else {
-        const pt = player && !player.dead && dist(e, player) < 500 ? player : null;
-        const m = nearestEnemy(e, 460);
-        // ult on the player when healthy + available
-        if (pt && e.level >= 6 && time >= e.abCd[3]) castAbility(e, 3, pt.x, pt.y);
-        else if (pt && time >= e.abCd[0] && e.level >= 1) castAbility(e, 0, pt.x, pt.y);
-        else if (m && time >= e.abCd[1] && e.level >= 2) castAbility(e, 1, m.x, m.y);
-        else if (low === false && e.hp < e.maxHp * .6 && time >= e.abCd[2] && e.level >= 3) castAbility(e, 2, e.x, e.y);
-        if (pt && player.hp < player.maxHp * .5) e.target = player;
-        else if (m) e.target = m;
-        else {
-          // push toward player side, but not past own minions too far
-          e.target = null;
-          e.order = { x: clamp(e.x - 120, 500, WORLD.w - 400), y: LANE_Y + (Math.random() - .5) * 120 };
-        }
-        // don't tank towers alone
-        const twD = nearestTower(e, 340);
-        if (twD && !units.some(m2 => !m2.dead && m2.team === 1 && m2.kind === 'minion' && dist(m2, twD) < 300)) {
-          e.target = null; e.order = { x: e.x + 200, y: LANE_Y };
-        }
+  // AI brain for every non-player hero
+  for (const e of heroes) {
+    if (e === player || e.dead) continue;
+    if (time < (e.aiT || 0)) continue;
+    e.aiT = time + 0.5;
+    const home = coreOf(e.team);
+    const low = e.hp < e.maxHp * 0.32;
+    if (low) { e.target = null; e.order = { x: home.x + (e.team === 0 ? 90 : -90), y: home.y }; continue; }
+    const foeHero = heroes.find(h => !h.dead && h.team !== e.team && dist(e, h) < 520);
+    const m = nearestEnemy(e, 460);
+    if (foeHero && e.level >= 6 && time >= e.abCd[3]) castAbility(e, 3, foeHero.x, foeHero.y);
+    else if (foeHero && time >= e.abCd[0]) castAbility(e, 0, foeHero.x, foeHero.y);
+    else if (m && time >= e.abCd[1] && e.level >= 2) castAbility(e, 1, m.x, m.y);
+    else if (e.hp < e.maxHp * .6 && time >= e.abCd[2] && e.level >= 3) castAbility(e, 2, e.x, e.y);
+    if (foeHero && foeHero.hp < foeHero.maxHp * .5) { e.target = foeHero; continue; }
+    if (m) { e.target = m; continue; }
+    e.target = null;
+    // jungler contests the altar when it's hot; laners walk their lane
+    if (e.lane === 2 && ALTAR.owner !== e.team && time > ALTAR.lockT) {
+      e.order = { x: ALTAR.x + (Math.random() - .5) * 40, y: ALTAR.y + (Math.random() - .5) * 40 };
+    } else {
+      const lane = e.lane === 2 ? (Math.random() < .5 ? 0 : 1) : e.lane;
+      const y = LANES[lane];
+      const dir = e.team === 0 ? 1 : -1;
+      let tx = clamp(e.x + dir * 260, 420, WORLD.w - 420);
+      // walk WITH the wave: never push far past your own minion frontline —
+      // an uncapped AI sprinted to the enemy tower before wave one arrived
+      let front = e.team === 0 ? 480 : WORLD.w - 480;
+      for (const m2 of units) {
+        if (m2.dead || m2.kind !== 'minion' || m2.team !== e.team) continue;
+        front = e.team === 0 ? Math.max(front, m2.x) : Math.min(front, m2.x);
       }
+      tx = e.team === 0 ? Math.min(tx, front + 160) : Math.max(tx, front - 160);
+      e.order = { x: tx, y: y + (Math.random() - .5) * 90 };
     }
+    // don't tank towers without minion cover
+    const twD = nearestTower(e, 340);
+    if (twD && !units.some(m2 => !m2.dead && m2.team === e.team && m2.kind === 'minion' && dist(m2, twD) < 300)) {
+      e.target = null; e.order = { x: e.x + (e.team === 0 ? -220 : 220), y: e.y };
+    }
+  }
+  // the ALTAR: one team's heroes alone inside the ring make capture progress
+  if (time > ALTAR.lockT) {
+    const inside = [0, 0];
+    for (const h of heroes) if (!h.dead && Math.hypot(h.x - ALTAR.x, h.y - ALTAR.y) < ALTAR.r) inside[h.team]++;
+    if (inside[0] > 0 !== inside[1] > 0) {
+      const team = inside[0] > 0 ? 0 : 1;
+      ALTAR.prog += dt / 2.5 * (ALTAR.capTeam === team ? 1 : -1);
+      if (ALTAR.capTeam !== team && ALTAR.prog <= 0) { ALTAR.capTeam = team; ALTAR.prog = 0; }
+      if (ALTAR.prog >= 1) {
+        ALTAR.prog = 0; ALTAR.owner = team; ALTAR.lockT = time + 90;
+        for (const h of heroes) if (h.team === team) { h.buff = 'EMBERBRAND'; h.buffT = time + 45; }
+        if (team === 0) gold += 80;
+        feed(team === 0 ? '⚑ Your team claims the ALTAR — team EMBERBRAND!' : '⚑ Enemy team claims the ALTAR.');
+        fxPush({ kind: 'shock', x: ALTAR.x, y: ALTAR.y, life: .8, max: .8, r: 130, c: TEAM[team].light });
+      }
+    } else ALTAR.prog = Math.max(0, ALTAR.prog - dt / 4);
   }
 }
 
@@ -827,27 +877,39 @@ function buildGround() {
     g.fillStyle = 'rgba(' + (x > WORLD.w / 2 ? '60,40,36' : '40,52,66') + ',' + (0.03 + Math.random() * 0.05) + ')';
     g.beginPath(); g.ellipse(x, y, r * (1 + Math.random()), r * 0.6, Math.random() * 3, 0, TAU); g.fill();
   }
-  // jungle bands (darker)
-  for (const [y0, y1] of [[0, 430], [970, WORLD.h]]) {
-    g.fillStyle = 'rgba(12,16,20,0.42)';
-    g.fillRect(0, y0, WORLD.w, y1 - y0);
-    for (let i = 0; i < 260; i++) {
-      const x = Math.random() * WORLD.w, y = y0 + Math.random() * (y1 - y0);
-      g.fillStyle = 'rgba(20,30,26,' + (0.2 + Math.random() * 0.3) + ')';
-      g.beginPath(); g.arc(x, y, 10 + Math.random() * 34, 0, TAU); g.fill();
+  // jungle: darker everywhere except the lanes and base plazas
+  g.fillStyle = 'rgba(12,16,20,0.40)';
+  g.fillRect(0, 0, WORLD.w, WORLD.h);
+  for (let i = 0; i < 700; i++) {
+    const x = Math.random() * WORLD.w, y = Math.random() * WORLD.h;
+    g.fillStyle = 'rgba(20,30,26,' + (0.15 + Math.random() * 0.25) + ')';
+    g.beginPath(); g.arc(x, y, 8 + Math.random() * 28, 0, TAU); g.fill();
+  }
+  // roads: two lanes + base plazas + short ramps
+  const road = (x0, y0, w, h) => {
+    g.fillStyle = '#3d4150'; g.fillRect(x0, y0, w, h);
+    const lg = g.createLinearGradient(0, y0, 0, y0 + h);
+    lg.addColorStop(0, 'rgba(0,0,0,0.35)'); lg.addColorStop(0.5, 'rgba(255,235,200,0.07)'); lg.addColorStop(1, 'rgba(0,0,0,0.35)');
+    g.fillStyle = lg; g.fillRect(x0, y0, w, h);
+    for (let i = 0; i < (w * h) / 4200; i++) {
+      const x = x0 + Math.random() * w, y = y0 + Math.random() * h;
+      g.fillStyle = 'rgba(' + (Math.random() > .5 ? '70,74,88' : '52,56,68') + ',' + (0.4 + Math.random() * .4) + ')';
+      g.beginPath(); g.ellipse(x, y, 14 + Math.random() * 22, 9 + Math.random() * 14, Math.random(), 0, TAU); g.fill();
     }
+  };
+  for (const y of LANES) road(560, y - 110, WORLD.w - 1120, 220);
+  road(120, MID_Y - 240, 520, 480);                 // dawn base plaza
+  road(WORLD.w - 640, MID_Y - 240, 520, 480);        // maw base plaza
+  for (const t2 of [0, 1]) for (const y of LANES) {  // diagonal ramps base→lanes
+    const bx = t2 === 0 ? 560 : WORLD.w - 560;
+    g.save(); g.strokeStyle = '#3d4150'; g.lineWidth = 150; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(bx + (t2 === 0 ? 20 : -20), MID_Y); g.lineTo(bx + (t2 === 0 ? 260 : -260), y); g.stroke();
+    g.restore();
   }
-  // the lane: worn stone road
-  g.fillStyle = '#3d4150';
-  g.fillRect(0, LANE_Y - 130, WORLD.w, 260);
-  const lg = g.createLinearGradient(0, LANE_Y - 130, 0, LANE_Y + 130);
-  lg.addColorStop(0, 'rgba(0,0,0,0.35)'); lg.addColorStop(0.5, 'rgba(255,235,200,0.07)'); lg.addColorStop(1, 'rgba(0,0,0,0.35)');
-  g.fillStyle = lg; g.fillRect(0, LANE_Y - 130, WORLD.w, 260);
-  for (let i = 0; i < 420; i++) {
-    const x = Math.random() * WORLD.w, y = LANE_Y - 120 + Math.random() * 240;
-    g.fillStyle = 'rgba(' + (Math.random() > .5 ? '70,74,88' : '52,56,68') + ',' + (0.4 + Math.random() * .4) + ')';
-    g.beginPath(); g.ellipse(x, y, 16 + Math.random() * 26, 10 + Math.random() * 16, Math.random(), 0, TAU); g.fill();
-  }
+  // the altar clearing
+  road(ALTAR.x - 170, ALTAR.y - 130, 340, 260);
+  g.strokeStyle = 'rgba(255,233,168,0.35)'; g.lineWidth = 6;
+  g.beginPath(); g.arc(ALTAR.x, ALTAR.y, ALTAR.r, 0, TAU); g.stroke();
   // camp clearings
   for (const c of JUNGLE) {
     g.fillStyle = 'rgba(58,52,44,0.55)';
@@ -1065,7 +1127,11 @@ function drawMinimap() {
   const W = m.width, H = m.height;
   g.fillStyle = '#0b0e13'; g.fillRect(0, 0, W, H);
   const sx = W / WORLD.w, sy = H / WORLD.h;
-  g.fillStyle = 'rgba(70,74,90,0.6)'; g.fillRect(0, (LANE_Y - 130) * sy, W, 260 * sy);
+  g.fillStyle = 'rgba(70,74,90,0.6)';
+  for (const y of LANES) g.fillRect(560 * sx, (y - 110) * sy, (WORLD.w - 1120) * sx, 220 * sy);
+  // altar
+  g.fillStyle = ALTAR.owner === 0 ? '#ffd98a' : ALTAR.owner === 1 ? '#ff8a6a' : '#8a94a6';
+  g.beginPath(); g.arc(ALTAR.x * sx, ALTAR.y * sy, 4, 0, TAU); g.fill();
   for (const tw of towers) {
     if (tw.hp <= 0) continue;
     g.fillStyle = tw.team === 0 ? '#5aa2ff' : '#ff5a5a';
@@ -1155,6 +1221,21 @@ function frame(ts) {
     cx.beginPath(); cx.moveTo((player.x - camX) * ZOOM, (player.y - camY) * ZOOM);
     cx.lineTo((player.order.x - camX) * ZOOM, (player.order.y - camY) * ZOOM); cx.stroke();
   }
+  // altar: live ring + capture progress arc
+  {
+    const ax = (ALTAR.x - camX) * ZOOM, ay = (ALTAR.y - camY) * ZOOM;
+    cx.save();
+    const locked = time < ALTAR.lockT;
+    cx.globalAlpha = locked ? 0.35 : 0.9;
+    cx.strokeStyle = ALTAR.owner === 0 ? 'rgba(255,217,138,.8)' : ALTAR.owner === 1 ? 'rgba(255,138,106,.8)' : 'rgba(180,190,210,.6)';
+    cx.lineWidth = 3;
+    cx.beginPath(); cx.arc(ax, ay, ALTAR.r * ZOOM, 0, TAU); cx.stroke();
+    if (!locked && ALTAR.prog > 0 && ALTAR.capTeam >= 0) {
+      cx.strokeStyle = 'rgba(' + TEAM[ALTAR.capTeam].light + ',0.95)'; cx.lineWidth = 6;
+      cx.beginPath(); cx.arc(ax, ay, ALTAR.r * ZOOM + 8, -Math.PI / 2, -Math.PI / 2 + TAU * ALTAR.prog); cx.stroke();
+    }
+    cx.restore();
+  }
   for (const tw of towers) drawTower(tw);
   const zs = units.slice().sort((a, b) => (a.kind === 'hero' ? 1 : 0) - (b.kind === 'hero' ? 1 : 0) || a.y - b.y);
   for (const u of zs) if (!u.dead) drawUnit(u);
@@ -1226,12 +1307,27 @@ function startGame(hk) {
   $('pick').classList.add('hidden');
   for (const el of ['top', 'plate', 'bar', 'mm', 'feed']) $(el).classList.remove('hidden');
   stage();
-  player = mkHero(0, hk, 330, LANE_Y);
-  const pool = Object.keys(HEROES).filter(k => k !== hk);
-  foe = mkHero(1, pool[Math.floor(Math.random() * pool.length)], WORLD.w - 330, LANE_Y);
-  heroStat(player); heroStat(foe);
-  player.hp = player.maxHp; foe.hp = foe.maxHp;
-  units.push(player, foe);
+  heroes = [];
+  const all = Object.keys(HEROES);
+  player = mkHero(0, hk, 380, MID_Y);
+  player.lane = 0;
+  heroes.push(player);
+  // two AI allies from the rest of the roster; enemy team of three (roster of
+  // four means one mirror match — the lane rival)
+  const rest = all.filter(k => k !== hk).sort(() => Math.random() - .5);
+  const allies = rest.slice(0, 2);
+  allies.forEach((k, i) => {
+    const h = mkHero(0, k, 380, MID_Y + 90 + i * 60);
+    h.lane = i === 0 ? 1 : 2;                      // ally 1 bot lane, ally 2 jungles
+    heroes.push(h);
+  });
+  const epool = all.sort(() => Math.random() - .5).slice(0, 3);
+  epool.forEach((k, i) => {
+    const h = mkHero(1, k, WORLD.w - 380, MID_Y + (i - 1) * 80);
+    h.lane = i;                                     // top / bot / jungle
+    heroes.push(h);
+  });
+  for (const h of heroes) { heroStat(h); h.hp = h.maxHp; units.push(h); }
   camX = clamp(player.x - VW / ZOOM / 2, 0, WORLD.w - VW / ZOOM);
   camY = clamp(player.y - VH / ZOOM / 2, 0, WORLD.h - VH / ZOOM);
   bindBar();
