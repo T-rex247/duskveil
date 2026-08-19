@@ -528,7 +528,9 @@ function castAbility(u, i, tx, ty, force) {
   switch (ab.type) {
     case 'bolt': {
       u.face = ang;
-      fxPush({ kind: 'mflash', x: u.x, y: u.y, rot: ang, life: .12, max: .12, c: lrgb, r: 18 });
+      fxPush({ kind: 'mflash', x: u.x, y: u.y, rot: ang, life: .2, max: .2, c: lrgb, r: 26 });
+      fxPush({ kind: 'shock', x: u.x, y: u.y, life: .25, max: .25, r: 34, c: lrgb });
+      sparks(u.x, u.y, ang, lrgb, 1.4);
       const proj = { x: u.x, y: u.y, ang, sp: ab.speed, left: ab.range, dmg: ab.dmg(l), team: u.team, src: u, c: lrgb };
       projectiles.push(proj);
       break;
@@ -538,9 +540,12 @@ function castAbility(u, i, tx, ty, force) {
       const X = tx, Y = ty;
       telegraphs.push({ x: X, y: Y, r: ab.radius, at: time + ab.delay, team: u.team, c: lrgb, born: time, cb: () => {
         aoeDamage(X, Y, ab.radius, ab.dmg(l), u);
-        fxPush({ kind: 'shock', x: X, y: Y, life: .45, max: .45, r: ab.radius, c: lrgb });
-        fxPush({ kind: 'flash', x: X, y: Y, life: .2, max: .2, r: ab.radius * .55 });
-        addShake(X, Y, 6);
+        fxPush({ kind: 'column', x: X, y: Y, life: .55, max: .55, r: ab.radius * 1.1, c: lrgb });
+        fxPush({ kind: 'shock', x: X, y: Y, life: .5, max: .5, r: ab.radius, c: lrgb });
+        fxPush({ kind: 'flash', x: X, y: Y, life: .22, max: .22, r: ab.radius * .6 });
+        fxPush({ kind: 'scorch', x: X, y: Y, life: 2.4, max: 2.4, r: ab.radius * 0.7, c: lrgb });
+        sparks(X, Y, -Math.PI / 2, lrgb, 2.2);
+        addShake(X, Y, 8);
       } });
       break;
     }
@@ -548,6 +553,7 @@ function castAbility(u, i, tx, ty, force) {
       u.sh = ab.amount(l); u.shT = time + ab.dur;
       if (ab.haste) { u.haste = ab.haste; u.hasteT = time + ab.dur; }
       fxPush({ kind: 'shock', x: u.x, y: u.y, life: .4, max: .4, r: 50, c: lrgb });
+      fxPush({ kind: 'runes', x: u.x, y: u.y, life: ab.dur, max: ab.dur, r: 42, c: lrgb, follow: u });
       break;
     case 'haste':
       u.haste = ab.haste; u.hasteT = time + ab.dur;
@@ -555,6 +561,7 @@ function castAbility(u, i, tx, ty, force) {
       break;
     case 'arc': {
       u.face = ang; u.atkT = time;
+      fxPush({ kind: 'crescent', x: u.x, y: u.y, life: .38, max: .38, r: ab.radius, ang: ang - 0.5, sweep: 1.4, c: lrgb });
       sheetFx('fx_ability_daybreak', { x: u.x, y: u.y, size: ab.radius * 1.6 });
       for (const t of units) if (foesOf(u)(t) && dist(u, t) < ab.radius && Math.abs(Math.atan2(Math.sin(Math.atan2(t.y - u.y, t.x - u.x) - ang), Math.cos(Math.atan2(t.y - u.y, t.x - u.x) - ang))) < 1.2)
         dealDamage(t, ab.dmg(l), u);
@@ -579,6 +586,7 @@ function castAbility(u, i, tx, ty, force) {
         if (u.dead || n >= ab.ticks) { clearInterval(iv); return; }
         n++;
         sheetFx('fx_ability_daybreak', { x: u.x, y: u.y, size: ab.radius * 1.9 });
+        fxPush({ kind: 'crescent', x: u.x, y: u.y, life: .3, max: .3, r: ab.radius * 0.9, ang: n * 2.1, sweep: 2.2, c: lrgb });
         fxPush({ kind: 'shock', x: u.x, y: u.y, life: .4, max: .4, r: ab.radius, c: lrgb });
         aoeDamage(u.x, u.y, ab.radius, ab.dmg(l), u);
         addShake(u.x, u.y, 6);
@@ -612,6 +620,8 @@ function castAbility(u, i, tx, ty, force) {
         units.push(b);
       }
       fxPush({ kind: 'shock', x: u.x, y: u.y, life: .4, max: .4, r: 60, c: lrgb });
+      fxPush({ kind: 'scorch', x: u.x, y: u.y, life: 1.6, max: 1.6, r: 55, c: lrgb });
+      sparks(u.x, u.y, -Math.PI / 2, lrgb, 2);
       break;
     }
     case 'beam': {
@@ -642,8 +652,11 @@ function castAbility(u, i, tx, ty, force) {
       capTo(ab.range);
       const X = tx, Y = ty;
       feed(u === player ? 'ORBITAL BRIMSTONE inbound…' : '⚠ ENEMY NUKE INBOUND — MOVE!');
+      fxPush({ kind: 'meteor', x: X, y: Y, life: ab.delay, max: ab.delay });
       telegraphs.push({ x: X, y: Y, r: ab.radius, at: time + ab.delay, team: u.team, c: lrgb, born: time, nuke: true, cb: () => {
         aoeDamage(X, Y, ab.radius, ab.dmg(l), u);
+        fxPush({ kind: 'column', x: X, y: Y, life: .7, max: .7, r: ab.radius * 1.2, c: '255,170,80' });
+        fxPush({ kind: 'scorch', x: X, y: Y, life: 4, max: 4, r: ab.radius * 0.85, c: '255,140,60' });
         for (const tw of towers) if (tw.hp > 0 && tw.team !== u.team && dist({ x: X, y: Y }, tw) < ab.radius) dealDamage(tw, Math.round(ab.dmg(l) * .5), u);
         fxPush({ kind: 'flash', x: X, y: Y, life: .4, max: .4, r: ab.radius });
         fxPush({ kind: 'shock', x: X, y: Y, life: .8, max: .8, r: ab.radius * 1.25, c: lrgb });
@@ -1532,6 +1545,53 @@ function drawFxAll() {
       cx.strokeStyle = 'rgba(255,255,240,' + .8 * a + ')';
       cx.lineWidth = Math.max(1, f.r * .07) * ZOOM;
       cx.beginPath(); cx.arc(sx, sy, rr, 0, TAU); cx.stroke();
+    } else if (f.kind === 'crescent') {
+      cx.globalCompositeOperation = 'lighter';
+      const p2 = 1 - a, r0 = f.r * (0.55 + p2 * 0.65);
+      cx.save(); cx.translate(sx, sy); cx.rotate(f.ang + p2 * f.sweep);
+      const cg = cx.createLinearGradient(0, -r0 * ZOOM, 0, 0);
+      cg.addColorStop(0, 'rgba(255,255,255,' + a + ')'); cg.addColorStop(1, 'rgba(' + f.c + ',0)');
+      cx.strokeStyle = cg; cx.lineWidth = 13 * ZOOM * a + 2; cx.lineCap = 'round';
+      cx.beginPath(); cx.arc(0, 0, r0 * ZOOM, -1.0, 1.0); cx.stroke();
+      cx.strokeStyle = 'rgba(255,255,255,' + a * 0.9 + ')'; cx.lineWidth = 3.5 * ZOOM;
+      cx.beginPath(); cx.arc(0, 0, r0 * ZOOM, -0.9, 0.9); cx.stroke();
+      cx.restore();
+    } else if (f.kind === 'column') {
+      cx.globalCompositeOperation = 'lighter';
+      const w2 = f.r * ZOOM * (0.5 + 0.5 * a);
+      const gg = cx.createLinearGradient(sx, sy - 320 * ZOOM, sx, sy);
+      gg.addColorStop(0, 'rgba(' + f.c + ',0)'); gg.addColorStop(0.75, 'rgba(' + f.c + ',' + a * 0.7 + ')'); gg.addColorStop(1, 'rgba(255,255,255,' + a + ')');
+      cx.fillStyle = gg; cx.fillRect(sx - w2 / 2, sy - 320 * ZOOM, w2, 320 * ZOOM);
+      cx.fillStyle = 'rgba(255,255,255,' + a * 0.85 + ')';
+      cx.fillRect(sx - w2 * 0.14, sy - 320 * ZOOM, w2 * 0.28, 320 * ZOOM);
+    } else if (f.kind === 'scorch') {
+      cx.globalCompositeOperation = 'source-over';
+      cx.fillStyle = 'rgba(20,10,6,' + a * 0.4 + ')';
+      cx.beginPath(); cx.ellipse(sx, sy, f.r * ZOOM, f.r * 0.44 * ZOOM, 0, 0, TAU); cx.fill();
+      cx.globalCompositeOperation = 'lighter';
+      cx.strokeStyle = 'rgba(' + f.c + ',' + a * 0.5 + ')'; cx.lineWidth = 2 * ZOOM;
+      cx.beginPath(); cx.ellipse(sx, sy, f.r * 0.8 * ZOOM, f.r * 0.35 * ZOOM, 0, 0, TAU); cx.stroke();
+    } else if (f.kind === 'runes') {
+      cx.globalCompositeOperation = 'lighter';
+      cx.save(); cx.translate(sx, sy); cx.rotate(time * 1.8);
+      for (let k2 = 0; k2 < 6; k2++) {
+        const aa = k2 / 6 * TAU;
+        cx.fillStyle = 'rgba(' + f.c + ',' + a * 0.9 + ')';
+        cx.font = '700 ' + Math.round(13 * ZOOM) + 'px Cinzel, serif'; cx.textAlign = 'center';
+        cx.fillText('✦', Math.cos(aa) * f.r * ZOOM, Math.sin(aa) * f.r * 0.5 * ZOOM);
+      }
+      cx.restore();
+      cx.strokeStyle = 'rgba(' + f.c + ',' + a * 0.5 + ')'; cx.lineWidth = 2 * ZOOM;
+      cx.beginPath(); cx.ellipse(sx, sy, f.r * ZOOM, f.r * 0.5 * ZOOM, 0, 0, TAU); cx.stroke();
+    } else if (f.kind === 'meteor') {
+      cx.globalCompositeOperation = 'lighter';
+      const p3 = 1 - a;
+      const mx2 = sx + (1 - p3) * 260 * ZOOM, my2 = sy - (1 - p3) * 700 * ZOOM;
+      cx.strokeStyle = 'rgba(255,190,90,' + (0.7 * (1 - a * 0.3)) + ')'; cx.lineWidth = 7 * ZOOM; cx.lineCap = 'round';
+      cx.beginPath(); cx.moveTo(mx2 + 90 * ZOOM, my2 - 220 * ZOOM); cx.lineTo(mx2, my2); cx.stroke();
+      const mg = cx.createRadialGradient(mx2, my2, 1, mx2, my2, 26 * ZOOM);
+      mg.addColorStop(0, 'rgba(255,255,255,0.95)'); mg.addColorStop(0.5, 'rgba(255,170,70,0.8)'); mg.addColorStop(1, 'rgba(255,110,40,0)');
+      cx.fillStyle = mg; cx.beginPath(); cx.arc(mx2, my2, 26 * ZOOM, 0, TAU); cx.fill();
     } else if (f.kind === 'ghost') {
       const an = ANIMS[f.key]; const sh2 = an && an.idle;
       if (sh2) { cx.globalAlpha = 0.35 * a; cx.globalCompositeOperation = 'lighter';
@@ -1653,6 +1713,7 @@ function frame(ts) {
       if (f.kind === 'spk') { f.x += f.vx * dt; f.y += f.vy * dt; f.vy += 260 * dt; f.vx *= .9; }
       else if (f.kind === 'dmg') { f.y += f.vy * dt; f.vy *= 0.93; }
       else if (f.kind === 'ghost' && f.rise) { f.y -= 26 * dt; }
+      else if (f.kind === 'runes' && f.follow && !f.follow.dead) { f.x = f.follow.x; f.y = f.follow.y; }
       if (f.life <= 0) fx.splice(i, 1);
     }
     for (let i = sheetFxList.length - 1; i >= 0; i--) if ((time - sheetFxList[i].t0) / sheetFxList[i].dur >= 1) sheetFxList.splice(i, 1);
