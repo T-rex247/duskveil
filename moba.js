@@ -443,7 +443,8 @@ function fireAt(u, t) {
   u.atkT = time; u.cdT = time + u.cd / (u.hasteT > time ? u.haste : 1);
   fireFx(u, t);
   if (NET.on && !NET.guest && NET.evq.length < 120) NET.evq.push(['atk', u.id, t.id]);
-  const _dm = effDmg(u);
+  let _dm = effDmg(u);
+  if (u.hkey === 'liora' && t._brand > time) { _dm += 40 + 10 * u.level; t._brand = 0; fxPush({ kind: 'flash', x: t.x, y: t.y, life: .22, max: .22, r: 44 }); sheetFx('fx_hit_gold', { x: t.x, y: t.y, size: 120 }); }
   dealDamage(t, _dm, u);
   if (u.kind === 'hero') { const ls = itemStat(u, 'ls'); if (ls > 0) u.hp = Math.min(u.maxHp, u.hp + _dm * ls); }
 }
@@ -574,8 +575,10 @@ function castAbility(u, i, tx, ty, force) {
       u.face = ang; u.atkT = time;
       fxPush({ kind: 'crescent', x: u.x, y: u.y, life: .38, max: .38, r: ab.radius, ang: ang - 0.5, sweep: 1.4, c: lrgb });
       sheetFx('fx_ability_daybreak', { x: u.x, y: u.y, size: ab.radius * 1.6 });
-      for (const t of units) if (foesOf(u)(t) && dist(u, t) < ab.radius && Math.abs(Math.atan2(Math.sin(Math.atan2(t.y - u.y, t.x - u.x) - ang), Math.cos(Math.atan2(t.y - u.y, t.x - u.x) - ang))) < 1.2)
-        dealDamage(t, ab.dmg(l), u);
+      for (const t of units) if (foesOf(u)(t) && dist(u, t) < ab.radius && Math.abs(Math.atan2(Math.sin(Math.atan2(t.y - u.y, t.x - u.x) - ang), Math.cos(Math.atan2(t.y - u.y, t.x - u.x) - ang))) < 1.2) {
+        const ex2 = ab.ult && u.hkey === 'corwen' ? Math.round(0.45 * (t.maxHp - t.hp)) : 0;   // Garen-style execute
+        dealDamage(t, ab.dmg(l) + ex2, u); onAbilityHit(u, t);
+      }
       for (const tw of towers) if (tw.hp > 0 && tw.team !== u.team && dist(u, tw) < ab.radius) dealDamage(tw, ab.dmg(l), u);
       addShake(u.x, u.y, 4);
       break;
@@ -617,6 +620,7 @@ function castAbility(u, i, tx, ty, force) {
           fxPush({ kind: 'mflash', x: u.x, y: u.y, rot: u.face, life: .09, max: .09, c: lrgb, r: 14 });
           sparks(t.x, t.y, u.face, lrgb, 1);
           dealDamage(t, ab.dmg(l), u);
+          onAbilityHit(u, t);
         }
         n++;
       }, 200);
@@ -648,7 +652,7 @@ function castAbility(u, i, tx, ty, force) {
         const proj = dx * Math.cos(ang) + dy * Math.sin(ang);
         if (proj < 0 || proj > ab.range) continue;
         const off = Math.abs(-dx * Math.sin(ang) + dy * Math.cos(ang));
-        if (off < ab.width) dealDamage(t, ab.dmg(l), u);
+        if (off < ab.width) { dealDamage(t, ab.dmg(l), u); onAbilityHit(u, t); }
       }
       for (const tw of towers) {
         if (tw.hp <= 0 || tw.team === u.team) continue;
@@ -699,8 +703,28 @@ function castAbility(u, i, tx, ty, force) {
   u.abCd[i] = time + ab.cd * cdMul;
   return true;
 }
+/* League-study passives: called whenever a hero's ABILITY deals damage */
+function onAbilityHit(src, t) {
+  if (!src || src.kind !== 'hero') return;
+  if (src.hkey === 'bastille') {
+    for (let i = 0; i < 4; i++) src.abCd[i] = Math.max(time, (src.abCd[i] || 0) - 1.0);
+  }
+  if (src.hkey === 'liora' && t && t.kind) { t._brand = time + 5; }
+  ravenerStack(src, t);
+}
+function ravenerStack(src, t) {
+  if (!src || src.hkey !== 'ravener' || !t || !t.kind || t.dead) return;
+  t._sw = t._sw || { n: 0, im: 0 };
+  if (time < t._sw.im) return;
+  if (++t._sw.n >= 3) {
+    t._sw = { n: 0, im: time + 5 };
+    dealDamage(t, Math.round(28 + 8 * src.level + 0.04 * t.maxHp), src);
+    t.haste = 0.65; t.hasteT = time + 1;
+    fxPush({ kind: 'shock', x: t.x, y: t.y, life: .35, max: .35, r: 40, c: '255,120,200' });
+  }
+}
 function aoeDamage(x, y, r, dmg, src) {
-  for (const t of units) if (foesOf(src)(t) && Math.hypot(t.x - x, t.y - y) < r + t.r) dealDamage(t, dmg, src);
+  for (const t of units) if (foesOf(src)(t) && Math.hypot(t.x - x, t.y - y) < r + t.r) { dealDamage(t, dmg, src); onAbilityHit(src, t); }
 }
 const projectiles = [];
 
@@ -865,6 +889,7 @@ function heroesThink(dt) {
       const regen = nearCore ? h.maxHp * .06 : (h.buff === 'WARDLIGHT' ? 8 : (inCombat ? 1.6 : h.maxHp * 0.008));
       h.hp = Math.min(h.maxHp, h.hp + regen * dt);
       if (h.buffT && time > h.buffT) h.buff = null;
+      if ((h.hkey === 'corwen' || h.hkey === 'sovereign') && time - (h.hitT || -9) > 4 && h.sh <= 0) { h.sh = Math.round(h.maxHp * 0.09); h.shT = time + 9999; }
     }
   }
   // AI brain for every non-player hero
@@ -1423,6 +1448,15 @@ function drawUnit(u) {
     cx.fillRect(bx, by, w * f, h);
     cx.fillStyle = 'rgba(255,255,255,0.3)'; cx.fillRect(bx, by, w * f, 1);
     if (u.sh > 0) { cx.fillStyle = 'rgba(255,240,180,0.9)'; cx.fillRect(bx, by - 2, w * clamp(u.sh / u.maxHp, 0, 1), 2); }
+    if (u._brand > time) { cx.fillStyle = 'rgba(255,230,150,0.95)'; cx.font = Math.round(12 * ZOOM) + 'px serif'; cx.textAlign = 'center'; cx.fillText('✦', sx, by - 14 * ZOOM); }
+    if (u._sw && u._sw.n > 0 && time > u._sw.im) { for (let pi = 0; pi < u._sw.n; pi++) { cx.fillStyle = 'rgba(255,120,200,0.9)'; cx.beginPath(); cx.arc(sx - 12 * ZOOM + pi * 12 * ZOOM, by - 8 * ZOOM, 2.6 * ZOOM, 0, TAU); cx.fill(); } }
+    if (u.kind === 'hero' && u.team !== 0 && player && player.hkey === 'corwen' && player.level >= 6 && time >= player.abCd[3] && dist(player, u) < 420) {
+      const ab3 = player.hero.abilities[3];
+      const thr = clamp((ab3.dmg(player.level)) / Math.max(1, 1.45 * u.maxHp) + 0.31, 0, 0.95);
+      const px2 = bx + w * thr;
+      cx.fillStyle = u.hp / u.maxHp <= thr ? '#ffd700' : '#ffffff';
+      cx.fillRect(px2 - 1, by - 2, 2, h + 4);
+    }
     if (u.kind === 'hero') {
       cx.fillStyle = '#ffd98a'; cx.font = '700 ' + Math.round(10 * ZOOM) + 'px Rajdhani';
       cx.textAlign = 'center'; cx.fillText(String(u.level), sx, by - 3);
@@ -1709,6 +1743,7 @@ function frame(ts) {
       if (!hit) for (const t of units) if (!t.dead && t.team === 2 && p.src.kind === 'hero' && Math.hypot(t.x - p.x, t.y - p.y) < t.r + 14) { hit = t; break; }
       if (hit) {
         dealDamage(hit, p.dmg, p.src);
+        onAbilityHit(p.src, hit);
         sparks(p.x, p.y, p.ang, p.c, 1.4);
         fxPush({ kind: 'shock', x: p.x, y: p.y, life: .3, max: .3, r: 34, c: p.c });
         projectiles.splice(i, 1);
