@@ -9,6 +9,9 @@ const $ = id => document.getElementById(id);
  * locked on the clash. Exists so the graphics review loop grades the same
  * scene every round. */
 const DEMOF = typeof location !== 'undefined' && /[?&]demo=fight/.test(location.search);
+const NET = { on: false, guest: false, peer: null, conn: null, conns: [], seat: 0, evq: [], snapT: 0, myHk: '', myHid: -1, taken: [], pendingHk: '' };
+let MODE = 'solo', roomCode = '';
+const ICE = { config: { iceServers: [ { urls: 'stun:stun.l.google.com:19302' }, { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' } ] } };
 const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -18,7 +21,7 @@ const TAU = Math.PI * 2;
 /* 3v3 twin-lane arena (Twisted-Treeline-shaped, original): two lanes over a
  * jungle midfield with a capturable central altar. */
 const WORLD = { w: 3000, h: 1900 };
-const LANES = [560, 1340];
+const LANES = [360, 1540];
 const MID_Y = 950;
 const LANE_Y = MID_Y;                    // base/core height
 const cv = $('cv'), cx = cv.getContext('2d');
@@ -52,7 +55,7 @@ const FX_SHEETS = ['fx_hit_gold', 'fx_hit_cyan', 'fx_hit_ember', 'fx_muzzle_gold
 const PLATE_FILES = { keep: 'dawnmarch_keep', tower_d: 'dawnmarch_watchtower', spire: 'mawborn_brimstonespire', heart: 'mawborn_pitheart' };
 const TILE_FILES = {
   meadow: 'ground_meadowstone', dirt: 'ground_neutraldirt', cratered: 'ground_cratered',
-  crystal_rich: 'crystal_rich_256', crystal_full: 'crystal_full_256',
+  crystal_rich: 'crystal_rich_256', crystal_full: 'crystal_full_256', painting: 'mapgen',
   rock: 'doodad_rockoutcrop_256', tree: 'doodad_deadtree_256',
   ruins: 'doodad_ruinpillars_256', bones: 'doodad_bonespire_256',
 };
@@ -222,10 +225,11 @@ function heroStat(u) {
   const h = u.hero, l = u.level;
   u.maxHp = h.hp + h.hpG * (l - 1);
   u.dmg = h.dmg + h.dmgG * (l - 1);
-  if (DEMOF && u.kind === 'hero') u.maxHp = Math.round(u.maxHp * 3);
+  if (DEMOF) u.maxHp = Math.round(u.maxHp * (u.kind === 'hero' ? 8 : 3));
 }
 function xpNeed(l) { return Math.round(90 * Math.pow(l, 1.35)); }
 function grantXp(u, amt) {
+  if (NET.guest) return;
   if (!u || u.kind !== 'hero' || u.dead) return;
   u.xp += amt;
   while (u.level < 9 && u.xp >= xpNeed(u.level)) {
@@ -315,14 +319,20 @@ function effDmg(u) {
   return Math.round(d);
 }
 function dealDamage(t, amt, src) {
+  if (NET.guest) return;
   if (DEMOF && t.plate) return;                    // demo: structures stay pristine
   if (t.hp === undefined || t.dead) return;
   if (t.sh > 0) { const a = Math.min(t.sh, amt); t.sh -= a; amt -= a; }
   t.hp -= amt; t.hitT = time;
   const okNum = !t._dmgAt || time - t._dmgAt > 0.18; if (okNum) t._dmgAt = time;
-  if (amt >= 1 && okNum) fxPush({ kind: 'dmg', x: t.x + (Math.random() - .5) * 44, y: t.y - (t.r || 20) - 10 - Math.random() * 14,
-    vy: -46, life: .85, max: .85, amt: Math.round(amt),
-    c: (src === player) ? '255,243,208' : (t === player ? '255,120,100' : '210,218,232') });
+  if (amt >= 1 && okNum) {
+    t._dmgSlot = ((t._dmgSlot || 0) + 1) % 3;
+    const dn = { kind: 'dmg', x: t.x + (t._dmgSlot - 1) * 34, y: t.y - (t.r || 20) - 12 - t._dmgSlot * 14,
+      vy: -56, life: 1.15, max: 1.15, amt: Math.round(amt),
+      c: (src === player) ? '255,220,120' : (t === player ? '255,110,90' : '245,248,255') };
+    fxPush(dn);
+    if (NET.on && !NET.guest && NET.evq.length < 120) NET.evq.push(['fx', dn]);
+  }
   if (t.r !== undefined && t.kind) {                        // unit knockback
     const a = Math.atan2(t.y - (src ? src.y : t.y), t.x - (src ? src.x : t.x - 1));
     t.kbx = Math.cos(a) * 5; t.kby = Math.sin(a) * 5; t.kbT = time;
@@ -334,6 +344,10 @@ function kill(t, src) {
     if (t.dead) return;
     t.dead = true;
     boom(t);
+    if (t.kind === 'hero') {
+      fxPush({ kind: 'shock', x: t.x, y: t.y, life: .9, max: .9, r: 110, c: TEAM[t.team].light });
+      fxPush({ kind: 'ghost', key: t.key, x: t.x, y: t.y - 10, face: t.face, life: 1.3, max: 1.3, size: 120, rise: true });
+    }
     const srcHero = src && src.kind === 'hero' ? src : null;
     if (t.kind === 'minion') {
       if (srcHero) { if (srcHero === player) gold += 22; grantXp(srcHero, 30); }
@@ -354,7 +368,7 @@ function kill(t, src) {
         else feed(t.hero.name + ' slain by your ally.');
       } else feed('Your ally ' + t.hero.name + ' has fallen.');
       if (srcHero) grantXp(srcHero, 150 + 40 * t.level);
-      t.respT = time + (DEMOF ? 2 : 7 + 2.5 * t.level);
+      t.respT = time + (DEMOF ? 1.5 : 7 + 2.5 * t.level);
       t.recallT = 0;
     } else if (t.kind === 'brood') { /* nothing */ }
   } else if (t.plate) {                                      // a tower
@@ -369,26 +383,34 @@ function kill(t, src) {
 function fireAt(u, t) {
   u.face = Math.atan2(t.y - u.y, t.x - u.x);
   u.atkT = time; u.cdT = time + u.cd / (u.hasteT > time ? u.haste : 1);
+  fireFx(u, t);
+  if (NET.on && !NET.guest && NET.evq.length < 120) NET.evq.push(['atk', u.id, t.id]);
+  dealDamage(t, effDmg(u), u);
+}
+function fireFx(u, t) {
   const fac = u.key.split('_')[0];
   const lrgb = { dawnmarch: '255,233,168', vectra: '159,232,255', mawborn: '255,150,90' }[fac] || '220,235,255';
   const melee = u.range <= 80;
   const mx = u.x + Math.cos(u.face) * (u.r + 6), my = u.y + Math.sin(u.face) * (u.r + 6);
   if (!melee) {
-    fxPush({ kind: 'laser', x1: mx, y1: my, x2: t.x, y2: t.y, life: .12, max: .12, c: 'rgb(' + lrgb + ')' });
-    fxPush({ kind: 'mflash', x: mx, y: my, rot: u.face, life: .1, max: .1, c: lrgb, r: u.kind === 'hero' ? 15 : 10 });
+    fxPush({ kind: 'laser', x1: mx, y1: my, x2: t.x, y2: t.y, life: .24, max: .24, c: 'rgb(' + lrgb + ')' });
+    fxPush({ kind: 'mflash', x: mx, y: my, rot: u.face, life: .18, max: .18, c: lrgb, r: u.kind === 'hero' ? 18 : 12 });
     sheetFx('fx_proj_' + (fac === 'dawnmarch' ? 'lightarrow' : fac === 'vectra' ? 'ionbolt_v3' : 'emberspit'),
-      { x: mx, y: my, x2: t.x, y2: t.y, dur: clamp(dist(u, t) / 1500, .06, .22), travel: true, size: u.kind === 'hero' ? 56 : 44 });
+      { x: mx, y: my, x2: t.x, y2: t.y, dur: clamp(dist(u, t) / 1050, .16, .34), travel: true, size: u.kind === 'hero' ? 64 : 50 });
   }
   const hitKey = fac === 'dawnmarch' ? 'fx_hit_gold' : fac === 'vectra' ? 'fx_hit_cyan' : 'fx_hit_ember';
-  sheetFx(hitKey, { x: t.x, y: t.y, size: u.kind === 'hero' ? 88 : 64 });
+  sheetFx(hitKey, { x: t.x, y: t.y, size: u.kind === 'hero' ? 104 : 76 });
   sparks(t.x, t.y, u.face, lrgb, u.kind === 'hero' ? 1.2 : 0.8);
-  dealDamage(t, effDmg(u), u);
 }
-function towerFire(tw, t) {
+function towerFx(tw, t) {
   const lrgb = tw.team === 0 ? '255,233,168' : '255,150,90';
   fxPush({ kind: 'laser', x1: tw.x, y1: tw.y - 60, x2: t.x, y2: t.y, life: .14, max: .14, c: 'rgb(' + lrgb + ')' });
   fxPush({ kind: 'flash', x: t.x, y: t.y, life: .12, max: .12, r: 15 });
   sparks(t.x, t.y, Math.atan2(t.y - tw.y, t.x - tw.x), lrgb, 1.2);
+}
+function towerFire(tw, t) {
+  towerFx(tw, t);
+  if (NET.on && !NET.guest && NET.evq.length < 120) NET.evq.push(['twr', towers.indexOf(tw), t.id]);
   tw.cdT = time + 1.1;
   dealDamage(t, tw.dmg, tw);
 }
@@ -441,10 +463,14 @@ function addShake(x, y, mag) {
 }
 
 /* ============================ abilities ============================ */
-function castAbility(u, i, tx, ty) {
+function castAbility(u, i, tx, ty, force) {
   const ab = u.hero.abilities[i];
+  if (!ab) return false;
   const need = ab.ult ? 6 : [1, 2, 3][i] || 1;
-  if (u.level < need || time < u.abCd[i] || u.dead) return false;
+  if (u.dead) return false;
+  if (!force && (u.level < need || time < u.abCd[i])) return false;
+  if (NET.on && !NET.guest && NET.evq.length < 120) NET.evq.push(['cast', u.id, i, tx, ty]);
+  u.castT = time; u.face = Math.atan2(ty - u.y, tx - u.x) || u.face;
   const l = u.level, fac = u.hero.fac;
   const lrgb = { dawnmarch: '255,233,168', vectra: '159,232,255', mawborn: '255,150,90' }[fac];
   let cdMul = u.buff === 'WARDLIGHT' ? 0.8 : 1;
@@ -491,6 +517,7 @@ function castAbility(u, i, tx, ty) {
       capTo(ab.range);
       const X = tx, Y = ty;
       fxPush({ kind: 'laser', x1: u.x, y1: u.y, x2: X, y2: Y, life: .2, max: .2, c: 'rgb(' + lrgb + ')' });
+      for (let g2 = 1; g2 <= 3; g2++) fxPush({ kind: 'ghost', key: u.key, x: lerp(u.x, X, g2 / 4), y: lerp(u.y, Y, g2 / 4), face: u.face, life: .34, max: .34, size: 120 });
       u.x = X; u.y = Y; u.order = null; u.face = ang;
       if (ab.dmg) aoeDamage(X, Y, ab.radius, ab.dmg(l), u);
       fxPush({ kind: 'shock', x: X, y: Y, life: .35, max: .35, r: ab.radius || 80, c: lrgb });
@@ -705,17 +732,20 @@ function towersThink(dt) {
 function coreOf(team) { return towers.find(t => t.core && t.team === team); }
 function heroesThink(dt) {
   // player recall
-  if (player.recallT && time >= player.recallT) {
-    player.recallT = 0;
-    const c = coreOf(0); player.x = c.x + 90; player.y = c.y; player.order = null;
-    fxPush({ kind: 'shock', x: player.x, y: player.y, life: .5, max: .5, r: 60, c: '255,233,168' });
+  for (const h of heroes) {
+    if (h.recallT && time >= h.recallT && !h.dead) {
+      h.recallT = 0;
+      const c = coreOf(h.team); h.x = c.x + (h.team === 0 ? 90 : -90); h.y = c.y; h.order = null;
+      fxPush({ kind: 'shock', x: h.x, y: h.y, life: .5, max: .5, r: 60, c: '255,233,168' });
+    }
   }
   // respawn + regen — every hero on the field
   for (const h of heroes) {
     if (h.dead && time >= h.respT) {
       h.dead = false; h.hp = h.maxHp;
       const c = coreOf(h.team);
-      h.x = c.x + (h.team === 0 ? 90 : -90); h.y = c.y + (Math.random() - .5) * 80;
+      if (DEMOF) { h.x = ALTAR.x + (h.team === 0 ? -1 : 1) * (250 + Math.random() * 80); h.y = ALTAR.y + (Math.random() - .5) * 260; }
+      else { h.x = c.x + (h.team === 0 ? 90 : -90); h.y = c.y + (Math.random() - .5) * 80; }
       h.order = null; h.target = null;
       fxPush({ kind: 'shock', x: h.x, y: h.y, life: .5, max: .5, r: 70, c: TEAM[h.team].light });
     }
@@ -729,10 +759,11 @@ function heroesThink(dt) {
   // AI brain for every non-player hero
   for (const e of heroes) {
     if ((e === player && !DEMOF) || e.dead) continue;   // demo drives the player too
+    if (e.human && e !== player) continue;               // a guest commands this hero
     if (time < (e.aiT || 0)) continue;
     e.aiT = time + 0.5;
     const home = coreOf(e.team);
-    const low = e.hp < e.maxHp * 0.32;
+    const low = !DEMOF && e.hp < e.maxHp * 0.32;
     if (low) { e.target = null; e.order = { x: home.x + (e.team === 0 ? 90 : -90), y: home.y }; continue; }
     const foeHero = heroes.find(h => !h.dead && h.team !== e.team && dist(e, h) < 520);
     const m = nearestEnemy(e, 460);
@@ -809,6 +840,10 @@ cv.addEventListener('pointerdown', e => {
 });
 cv.addEventListener('pointermove', e => { const w = worldXY(e); mouse = w; });
 function orderPlayer(x, y) {
+  if (NET.guest) netSend({ t: 'order', x: Math.round(x), y: Math.round(y) });
+  orderFor(player, x, y);
+}
+function orderFor(player, x, y) {
   // attack if clicking near an enemy
   let best = null, bd = 60;
   for (const t of units) {
@@ -830,12 +865,15 @@ function orderPlayer(x, y) {
 addEventListener('keydown', e => {
   if (!started || over || !player) return;
   const k = e.key.toLowerCase();
-  if (k === 'q') castAbility(player, 0, mouse.x, mouse.y);
-  else if (k === 'w') castAbility(player, 1, mouse.x, mouse.y);
-  else if (k === 'e') castAbility(player, 2, mouse.x, mouse.y);
-  else if (k === 'r') castAbility(player, 3, mouse.x, mouse.y);
-  else if (k === 'b' && !player.dead && !player.recallT) { player.recallT = time + 4; feed('Recalling…'); }
-  else if (k === 's') { player.order = null; player.target = null; }
+  if (k === 'q') tryCast(0, mouse.x, mouse.y);
+  else if (k === 'w') tryCast(1, mouse.x, mouse.y);
+  else if (k === 'e') tryCast(2, mouse.x, mouse.y);
+  else if (k === 'r') tryCast(3, mouse.x, mouse.y);
+  else if (k === 'b' && !player.dead && !player.recallT) {
+    if (NET.guest) { netSend({ t: 'recall' }); feed('Recalling…'); }
+    else { player.recallT = time + 4; feed('Recalling…'); }
+  }
+  else if (k === 's') { if (NET.guest) netSend({ t: 'stop' }); player.order = null; player.target = null; }
 });
 
 /* mobile ability buttons cast at nearest enemy / self */
@@ -844,18 +882,21 @@ function bindBar() {
   player.hero.abilities.forEach((ab, i) => {
     const d = document.createElement('div');
     d.className = 'ab' + (ab.ult ? ' ult' : '');
-    d.innerHTML = `<span class="k">${ab.k}</span><span class="ic">${ab.icon}</span><span class="n">${ab.name}</span><div class="cd hidden"></div>`;
+    d.style.backgroundImage = 'linear-gradient(180deg, rgba(8,11,16,.05) 45%, rgba(8,11,16,.82)), url(assets/icons/' + player.hkey + '_' + i + '.jpg)';
+    d.style.backgroundSize = 'cover'; d.style.backgroundPosition = 'center';
+    d.innerHTML = `<span class="k">${ab.k}</span><span class="n">${ab.name}</span><div class="cd hidden"></div>`;
     d.addEventListener('pointerdown', e => {
       e.stopPropagation();
       let tx = mouse.x, ty = mouse.y;
       const near = nearestEnemy(player, 700);
       if ((e.pointerType === 'touch' || (mouse.x === 0 && mouse.y === 0)) && near) { tx = near.x; ty = near.y; }
-      castAbility(player, i, tx, ty);
+      tryCast(i, tx, ty);
     });
     bar.appendChild(d);
   });
 }
 function paintBar() {
+  if (!player) return;
   const kids = $('bar').children;
   player.hero.abilities.forEach((ab, i) => {
     const el = kids[i]; if (!el) return;
@@ -865,14 +906,14 @@ function paintBar() {
     else {
       const left = player.abCd[i] - time;
       if (left > 0) {
-        cdel.classList.remove('hidden'); cdel.textContent = Math.ceil(left);
-        el.querySelector('.ic').style.opacity = '0.22';
+        cdel.classList.remove('hidden'); cdel.textContent = Math.max(1, Math.ceil(left));
+        const ic1 = el.querySelector('.ic'); if (ic1) ic1.style.opacity = '0.22';
         const pct = Math.max(0, Math.min(100, left / ab.cd * 100));
         cdel.style.background = 'conic-gradient(rgba(5,7,10,.88) ' + pct + '%, rgba(5,7,10,.25) ' + pct + '%)';
       }
       else {
         cdel.classList.add('hidden');
-        el.querySelector('.ic').style.opacity = '1';
+        const ic2 = el.querySelector('.ic'); if (ic2) ic2.style.opacity = '1';
         if (ab.ult) el.classList.add('ready-ult');
       }
       if (ab.ult && left > 0) el.classList.remove('ready-ult');
@@ -882,6 +923,7 @@ function paintBar() {
 
 /* ============================ feed / hud ============================ */
 function feed(t) {
+  if (NET.on && !NET.guest && /ALTAR|slain/.test(t) && NET.evq.length < 120) NET.evq.push(['feed', t]);
   const f = $('feed');
   if (feed._last === t && time - (feed._lastAt || 0) < 3) return;
   feed._last = t; feed._lastAt = time;
@@ -892,9 +934,11 @@ function feed(t) {
   if (/gold|ALTAR/.test(t)) d.className += ' gold';
   f.appendChild(d);
   while (f.children.length > 3) f.removeChild(f.firstChild);
-  setTimeout(() => { if (d.parentNode) d.parentNode.removeChild(d); }, 6000);
+  setTimeout(() => { if (d.parentNode) d.parentNode.removeChild(d); }, DEMOF ? 3000 : 6000);
 }
 function paintHud() {
+  if (!player) return;
+  if (time > 10 && Math.floor(time) !== paintHud._gs) { paintHud._gs = Math.floor(time); gold += 2; }
   $('tGold').textContent = gold;
   $('tLvl').textContent = player.level;
   $('plvl').textContent = player.level;
@@ -922,19 +966,26 @@ function buildGround() {
    * with dead trees and rocks, a crystal altar centerpiece, cratered camp
    * clearings, rock-lined map edges. Deterministic placement (seeded). */
   ground = document.createElement('canvas');
-  const S = 0.5;
+  const S = 0.85;
   ground.width = WORLD.w * S; ground.height = WORLD.h * S;
   const g = ground.getContext('2d');
   g.scale(S, S);
   let seed = 1337;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const T = 512;
-  // 1. base: meadowstone everywhere
-  if (TILES.meadow) for (let y = 0; y < WORLD.h; y += T) for (let x = 0; x < WORLD.w; x += T) g.drawImage(TILES.meadow, x, y, T, T);
-  // dusk grade: cool multiply, warmer on the MAW side
+  // 1. base: ONE cohesive painted map (R4 panel: tile compositing reads as
+  // photobash) + a whisper of tile texture for close-up grain
+  if (TILES.painting) g.drawImage(TILES.painting, 0, 0, WORLD.w, WORLD.h);
+  else if (TILES.meadow) for (let y = 0; y < WORLD.h; y += T) for (let x = 0; x < WORLD.w; x += T) g.drawImage(TILES.meadow, x, y, T, T);
+  if (TILES.painting && TILES.meadow) {
+    g.save(); g.globalAlpha = 0.2; g.globalCompositeOperation = 'overlay';
+    for (let y = 0; y < WORLD.h; y += T) for (let x = 0; x < WORLD.w; x += T) g.drawImage(TILES.meadow, x, y, T, T);
+    g.restore();
+  }
+  // dusk grade: gentle cool multiply
   g.globalCompositeOperation = 'multiply';
   const gr = g.createLinearGradient(0, 0, WORLD.w, 0);
-  gr.addColorStop(0, '#8d99b5'); gr.addColorStop(0.55, '#7e88a2'); gr.addColorStop(1, '#a08477');
+  gr.addColorStop(0, '#aab3c8'); gr.addColorStop(0.55, '#a2aabc'); gr.addColorStop(1, '#b8a294');
   g.fillStyle = gr; g.fillRect(0, 0, WORLD.w, WORLD.h);
   g.globalCompositeOperation = 'source-over';
   // 2. jungle bands: darker + mottled
@@ -949,9 +1000,7 @@ function buildGround() {
     g2.addColorStop(1, 'rgba(10,14,22,0)');
     g.fillStyle = g2; g.fillRect(0, yTop - 60, WORLD.w, yBot - yTop + 120);
   };
-  darkBand(0, LANES[0] - 150, 0.34);
-  darkBand(LANES[0] + 150, LANES[1] - 150, 0.30);
-  darkBand(LANES[1] + 150, WORLD.h, 0.34);
+  if (!TILES.painting) { darkBand(0, LANES[0] - 150, 0.34); darkBand(LANES[0] + 150, LANES[1] - 150, 0.30); darkBand(LANES[1] + 150, WORLD.h, 0.34); }
   // un-darken the base plazas
   g.save(); g.globalCompositeOperation = 'destination-out';
   for (const bx of [120, WORLD.w - 640]) { g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(bx, MID_Y - 260, 520, 520); }
@@ -974,22 +1023,22 @@ function buildGround() {
     g.fillStyle = lg2; g.fillRect(0, y - 150, WORLD.w, 300);
     g.globalCompositeOperation = 'source-over';
   };
-  for (const y of LANES) lane(y);
+  if (!TILES.painting) for (const y of LANES) lane(y);
   // base plaza roads
-  if (TILES.dirt) for (const bx of [120, WORLD.w - 640]) {
+  if (!TILES.painting && TILES.dirt) for (const bx of [120, WORLD.w - 640]) {
     for (let y = MID_Y - 240; y < MID_Y + 240; y += T) for (let x = bx; x < bx + 520; x += T)
       g.drawImage(TILES.dirt, x, y, Math.min(T, bx + 520 - x), Math.min(T, MID_Y + 240 - y));
   }
   // 4. altar: cratered clearing + crystal centerpiece + emissive glow
-  if (TILES.cratered) { g.save(); g.beginPath(); g.ellipse(ALTAR.x, ALTAR.y, 220, 155, 0, 0, TAU); g.clip(); g.globalAlpha = 0.7; g.translate(ALTAR.x, ALTAR.y); g.rotate(1.2); g.drawImage(TILES.cratered, -300, -300, 600, 600); g.restore(); g.globalAlpha = 1; }
+  if (!TILES.painting && TILES.cratered) { g.save(); g.beginPath(); g.ellipse(ALTAR.x, ALTAR.y, 220, 155, 0, 0, TAU); g.clip(); g.globalAlpha = 0.7; g.translate(ALTAR.x, ALTAR.y); g.rotate(1.2); g.drawImage(TILES.cratered, -300, -300, 600, 600); g.restore(); g.globalAlpha = 1; }
   const ag = g.createRadialGradient(ALTAR.x, ALTAR.y, 20, ALTAR.x, ALTAR.y, 260);
   ag.addColorStop(0, 'rgba(150,220,255,0.30)'); ag.addColorStop(1, 'rgba(150,220,255,0)');
   g.fillStyle = ag; g.fillRect(ALTAR.x - 260, ALTAR.y - 260, 520, 520);
   if (TILES.crystal_rich) g.drawImage(TILES.crystal_rich, ALTAR.x - 90, ALTAR.y - 150, 180, 180);
   // 5. camp clearings
   for (const c of JUNGLE) {
-    if (TILES.cratered) { g.save(); g.beginPath(); g.ellipse(c.x, c.y, 130, 90, 0, 0, TAU); g.clip(); g.globalAlpha = 0.55; g.translate(c.x, c.y); g.rotate(rnd() * TAU); const cs = 380 + rnd() * 200; g.drawImage(TILES.cratered, -cs / 2, -cs / 2, cs, cs); g.restore(); g.globalAlpha = 1; }
-    if (c.big && TILES.bones) g.drawImage(TILES.bones, c.x + 90, c.y - 150, 150, 150);
+    if (!TILES.painting && TILES.cratered) { g.save(); g.beginPath(); g.ellipse(c.x, c.y, 130, 90, 0, 0, TAU); g.clip(); g.globalAlpha = 0.55; g.translate(c.x, c.y); g.rotate(rnd() * TAU); const cs = 380 + rnd() * 200; g.drawImage(TILES.cratered, -cs / 2, -cs / 2, cs, cs); g.restore(); g.globalAlpha = 1; }
+    if (c.big && TILES.bones && !TILES.painting) { g.save(); g.translate(c.x + 165, c.y - 75); if (c.y < MID_Y) g.scale(-1, 1); g.rotate((rnd() - .5) * .3); const bs = 140 + rnd() * 30; g.drawImage(TILES.bones, -bs / 2, -bs / 2, bs, bs); g.restore(); }
   }
   // 6. doodads: trees + rocks in the jungle, ruins accents, rock-lined edges
   const put = (img, x, y, s2) => {
@@ -1001,7 +1050,8 @@ function buildGround() {
     g.drawImage(img, -s2 * sc / 2, -s2 * sc / 2, s2 * sc, s2 * sc);
     g.restore();
   };
-  for (let i = 0; i < 46; i++) {
+  const DOODS = TILES.painting ? 10 : 46;
+  for (let i = 0; i < DOODS; i++) {
     const x = 200 + rnd() * (WORLD.w - 400);
     const zone = rnd();
     let y;
@@ -1028,16 +1078,59 @@ function buildGround() {
   }
 }
 
+/* live map layer: pulsing altar + flickering camp braziers (not baked) */
+function drawLiveMap() {
+  const pulse = 0.55 + 0.45 * Math.sin(time * 1.7);
+  const ax = (ALTAR.x - camX) * ZOOM, ay = (ALTAR.y - camY) * ZOOM;
+  cx.save(); cx.globalCompositeOperation = 'lighter';
+  const g2 = cx.createRadialGradient(ax, ay, 8 * ZOOM, ax, ay, (120 + 26 * pulse) * ZOOM);
+  g2.addColorStop(0, 'rgba(120,235,255,' + (0.20 + 0.12 * pulse) + ')'); g2.addColorStop(1, 'rgba(120,235,255,0)');
+  cx.fillStyle = g2; cx.fillRect(ax - 160 * ZOOM, ay - 160 * ZOOM, 320 * ZOOM, 320 * ZOOM);
+  cx.strokeStyle = 'rgba(150,240,255,' + (0.22 + 0.2 * pulse) + ')'; cx.lineWidth = 2 * ZOOM;
+  cx.setLineDash([14 * ZOOM, 20 * ZOOM]); cx.lineDashOffset = -time * 30 * ZOOM;
+  cx.beginPath(); cx.ellipse(ax, ay, ALTAR.r * 1.35 * ZOOM, ALTAR.r * 0.95 * ZOOM, 0, 0, TAU); cx.stroke();
+  cx.setLineDash([]);
+  for (const c of JUNGLE) {
+    if (!c.big) continue;
+    const bx2 = (c.x + 165 - camX) * ZOOM, by2 = (c.y - 75 - camY) * ZOOM;
+    if (TILES.bones && bx2 > -160 && by2 > -160 && bx2 < VW + 160 && by2 < VH + 160) {
+      const swy = Math.sin(time * 2.1 + c.x) * 0.03, bsc = 1 + 0.025 * Math.sin(time * 7 + c.y);
+      cx.save(); cx.globalCompositeOperation = 'source-over'; cx.translate(bx2, by2); cx.scale(ZOOM * (c.y < MID_Y ? -1 : 1) * bsc, ZOOM * bsc); cx.rotate(swy);
+      cx.drawImage(TILES.bones, -75, -75, 150, 150); cx.restore();
+    }
+    if (bx2 < -80 || by2 < -80 || bx2 > VW + 80 || by2 > VH + 80) continue;
+    const fl = 0.5 + 0.5 * Math.sin(time * 9 + c.x);
+    const g3 = cx.createRadialGradient(bx2, by2, 2, bx2, by2, (46 + 14 * fl) * ZOOM);
+    g3.addColorStop(0, 'rgba(255,170,70,' + (0.28 + 0.18 * fl) + ')'); g3.addColorStop(1, 'rgba(255,120,40,0)');
+    cx.fillStyle = g3; cx.fillRect(bx2 - 70 * ZOOM, by2 - 70 * ZOOM, 140 * ZOOM, 140 * ZOOM);
+    if (Math.random() < 0.22) fxPush({ kind: 'spk', x: c.x + 165 + (Math.random() - .5) * 30, y: c.y - 85, vx: (Math.random() - .5) * 20, vy: -120 - Math.random() * 70, life: .8 + Math.random() * .5, max: 1.3, c: '255,180,90' });
+  }
+  cx.restore();
+}
+
 /* ============================ render ============================ */
 function drawSheet(u, sheet, size, hFlip, alpha) {
   const n = sheet.n;
-  const fi = Math.floor((time * sheet.fps + u.vPhase * n)) % n;
+  const fi = (u._atkAnim && time - u.atkT >= 0) ? Math.floor((time - u.atkT) * sheet.fps) % n : Math.floor((time * sheet.fps + u.vPhase * n)) % n;
   cx.save();
   cx.globalAlpha = alpha === undefined ? 1 : alpha;
   cx.translate(Math.round(u.x - camX) * ZOOM, Math.round(u.y - camY) * ZOOM);
   cx.scale(ZOOM, ZOOM);
+  const atkAge = time - u.atkT;
+  if (atkAge >= 0 && atkAge < 0.18) { const st = Math.sin(atkAge / 0.18 * Math.PI) * (u.range <= 80 ? 11 : 4); cx.translate(Math.cos(u.face) * st * ZOOM, Math.sin(u.face) * st * ZOOM); }
+  // procedural life: the sheets alone read frozen in stills (Tee 2026-08-19)
+  const ph = u.vPhase * 6.28;
+  if (u.moving) {
+    cx.translate(0, -Math.abs(Math.sin(time * 9 + ph)) * 3.2 * ZOOM);          // stride bob
+    cx.rotate(Math.sin(time * 9 + ph) * 0.055);                                 // gait sway
+  } else {
+    cx.translate(0, Math.sin(time * 2.3 + ph) * 1.1 * ZOOM);                    // breathing
+    cx.rotate(Math.sin(time * 1.4 + ph) * 0.018);
+  }
+  const castAge = time - (u.castT || -9);
+  if (castAge >= 0 && castAge < 0.32) { const cs = Math.sin(castAge / 0.32 * Math.PI); cx.translate(0, -5 * cs * ZOOM); cx.scale(1 + 0.07 * cs, 1 + 0.07 * cs); }
   const lean = clamp(Math.sin(u.face) * 0.18, -0.22, 0.22);
-  cx.rotate(u.moving ? lean : 0);
+  cx.rotate(u.moving ? lean : Math.cos(u.face) * -0.10);                        // face the fight even when planted
   if (hFlip) cx.scale(-1, 1);
   // hit flash pop
   const hitAge = time - u.hitT;
@@ -1056,6 +1149,7 @@ function drawUnit(u) {
   if (sx < -140 || sy < -140 || sx > VW + 140 || sy > VH + 140) return;
   const anims = ANIMS[u.key]; if (!anims) return;
   const state = (time - u.atkT < 0.4 && anims.attack) ? 'attack' : (u.moving && anims.walk ? 'walk' : 'idle');
+  u._atkAnim = state === 'attack';
   const sheet = anims[state] || anims.idle; if (!sheet) return;
   let size = u.kind === 'hero' ? 120 : u.kind === 'monster' ? (u.key === 'mawborn_pitbrute' ? 116 : 96) : 84;
   if (u.kind !== 'hero') size = Math.round(size * (u.vScale || 1));
@@ -1066,7 +1160,7 @@ function drawUnit(u) {
   cx.scale(ZOOM, ZOOM);
   cx.fillStyle = 'rgba(0,0,0,0.38)';
   cx.beginPath(); cx.ellipse(0, 0, size * 0.34, size * 0.13, 0, 0, TAU); cx.fill();
-  cx.strokeStyle = 'rgba(' + TEAM[u.team].rgb + ',' + (u.kind === 'hero' ? 0.9 : 0.5) + ')';
+  cx.strokeStyle = 'rgba(' + TEAM[u.team].rgb + ',' + (u.kind === 'hero' ? 0.95 : 0.75) + ')';
   cx.lineWidth = u.kind === 'hero' ? 2.4 : 1.3;
   cx.beginPath(); cx.ellipse(0, 0, size * 0.36, size * 0.14, 0, 0, TAU); cx.stroke();
   if (u === player) {
@@ -1074,6 +1168,13 @@ function drawUnit(u) {
     cx.beginPath(); cx.ellipse(0, 0, size * 0.44, size * 0.18, 0, 0, TAU); cx.stroke();
   }
   cx.restore();
+  if (u === player && !player.dead) {
+    const bob = Math.sin(time * 4) * 3;
+    cx.save(); cx.translate(sx, sy - (size * 0.62) * ZOOM + bob * ZOOM); cx.scale(ZOOM, ZOOM);
+    cx.fillStyle = 'rgba(255,217,138,0.95)'; cx.strokeStyle = 'rgba(0,0,0,0.7)'; cx.lineWidth = 2;
+    cx.beginPath(); cx.moveTo(0, 8); cx.lineTo(-7, -4); cx.lineTo(7, -4); cx.closePath(); cx.fill(); cx.stroke();
+    cx.restore();
+  }
   u.moving = false;                                       // consumed by stepUnit next tick
   drawSheet(u, sheet, size, hFlip);
   // shield ring
@@ -1084,7 +1185,7 @@ function drawUnit(u) {
     cx.restore();
   }
   // hp bar
-  if (u.hp < u.maxHp || u.kind === 'hero') {
+  if (u.hp < u.maxHp || u.kind === 'hero' || DEMOF) {
     const w = (u.kind === 'hero' ? 62 : 46) * ZOOM, h = (u.kind === 'hero' ? 6 : 4.5) * ZOOM;
     const bx = sx - w / 2, by = sy - size * 0.52 * ZOOM;
     cx.fillStyle = 'rgba(0,0,0,0.82)'; cx.fillRect(bx - 1, by - 1, w + 2, h + 2);
@@ -1222,9 +1323,15 @@ function drawFxAll() {
       cx.strokeStyle = 'rgba(255,255,240,' + .8 * a + ')';
       cx.lineWidth = Math.max(1, f.r * .07) * ZOOM;
       cx.beginPath(); cx.arc(sx, sy, rr, 0, TAU); cx.stroke();
+    } else if (f.kind === 'ghost') {
+      const an = ANIMS[f.key]; const sh2 = an && an.idle;
+      if (sh2) { cx.globalAlpha = 0.35 * a; cx.globalCompositeOperation = 'lighter';
+        const fl2 = Math.cos(f.face) < 0;
+        cx.save(); cx.translate(sx, sy); cx.scale(ZOOM * (fl2 ? -1 : 1), ZOOM);
+        cx.drawImage(sh2.img, 0, 0, sh2.fw, sh2.fh, -f.size / 2, -f.size / 2, f.size, f.size); cx.restore(); }
     } else if (f.kind === 'dmg') {
       cx.globalCompositeOperation = 'source-over';
-      const fs2 = Math.round((f.amt >= 100 ? 17 : 14) * ZOOM);
+      const fs2 = Math.round((f.amt >= 100 ? 23 : 17) * ZOOM);
       cx.font = '700 ' + fs2 + 'px Rajdhani, sans-serif';
       cx.textAlign = 'center';
       cx.lineWidth = 3; cx.strokeStyle = 'rgba(0,0,0,' + (0.85 * a) + ')';
@@ -1279,14 +1386,28 @@ function frame(ts) {
   last = ts;
   if (!over) {
     time += dt;
+    if (NET.guest) netLerp(dt); else {
     waveT -= dt;
-    if (DEMOF && Math.floor(time) % 10 === 0 && Math.floor(time) !== (frame._lastFeed || -1)) {
+    if (DEMOF && Math.floor(time) % 6 === 0 && Math.floor(time) !== (frame._lastFeed || -1)) {
       frame._lastFeed = Math.floor(time);
-      for (const team of [0, 1]) for (let i = 0; i < 2; i++) {
+      for (const team of [0, 1]) for (let i = 0; i < 1; i++) {
+        if (units.filter(u => !u.dead && u.kind === 'minion' && u.team === team).length >= 6) break;
         const d = MINIONS[team][i % 2];
         const u = mkUnit(team, d.key, ALTAR.x + (team === 0 ? -1 : 1) * (240 + Math.random() * 160), ALTAR.y - 170 + Math.random() * 340, d);
         u.order = { x: ALTAR.x + (team === 0 ? 60 : -60), y: u.y };
         units.push(u);
+      }
+    }
+    if (DEMOF && time > 3 && time - (frame._choreo || 0) > 2.1) {
+      frame._choreo = time;
+      const ready = heroes.filter(h => !h.dead).map(h => {
+        const abs = [0, 1, 2, 3].filter(i => h.level >= (h.hero.abilities[i].ult ? 6 : [1, 2, 3][i] || 1) && time >= h.abCd[i]);
+        return abs.length ? { h, i: abs[Math.floor(Math.random() * abs.length)] } : null;
+      }).filter(Boolean);
+      if (ready.length) {
+        const pickc = ready[Math.floor(Math.random() * ready.length)];
+        const foe = nearestEnemy(pickc.h, 620);
+        if (foe) castAbility(pickc.h, pickc.i, foe.x, foe.y);
       }
     }
     if (waveT <= 0) { waveT = 26; spawnWave(); }
@@ -1295,6 +1416,8 @@ function frame(ts) {
     separation();
     towersThink(dt);
     heroesThink(dt);
+    if (NET.on && !NET.guest) { NET.snapT += dt; if (NET.snapT >= 0.1) { NET.snapT = 0; sendSnap(); } }
+    }
     // projectiles (skillshots)
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const p = projectiles[i];
@@ -1320,14 +1443,16 @@ function frame(ts) {
       const f = fx[i]; f.life -= dt;
       if (f.kind === 'spk') { f.x += f.vx * dt; f.y += f.vy * dt; f.vy += 260 * dt; f.vx *= .9; }
       else if (f.kind === 'dmg') { f.y += f.vy * dt; f.vy *= 0.93; }
+      else if (f.kind === 'ghost' && f.rise) { f.y -= 26 * dt; }
       if (f.life <= 0) fx.splice(i, 1);
     }
     for (let i = sheetFxList.length - 1; i >= 0; i--) if ((time - sheetFxList[i].t0) / sheetFxList[i].dur >= 1) sheetFxList.splice(i, 1);
     for (let i = beams.length - 1; i >= 0; i--) if (time - beams[i].t0 > beams[i].dur) beams.splice(i, 1);
     units = units.filter(u => !u.dead || u.kind === 'hero');
     // camera follows player
-    const tx = clamp((DEMOF ? ALTAR.x : player.x) - VW / ZOOM / 2, 0, WORLD.w - VW / ZOOM);
-    const ty = clamp(player.y - VH / ZOOM / 2, 0, WORLD.h - VH / ZOOM);
+    const camF = DEMOF ? ALTAR : (player || ALTAR);
+    const tx = clamp((DEMOF ? ALTAR.x : camF.x) - VW / ZOOM / 2, 0, WORLD.w - VW / ZOOM);
+    const ty = clamp((DEMOF ? ALTAR.y : camF.y) - VH / ZOOM / 2, 0, WORLD.h - VH / ZOOM);
     camX += (tx - camX) * 0.12; camY += (ty - camY) * 0.12;
   }
   // render
@@ -1341,7 +1466,8 @@ function frame(ts) {
   }
   cx.save();
   cx.translate(ox, oy);
-  if (ground) cx.drawImage(ground, camX * .5, camY * .5, VW / ZOOM * .5, VH / ZOOM * .5, 0, 0, VW, VH);
+  if (ground) cx.drawImage(ground, camX * .85, camY * .85, VW / ZOOM * .85, VH / ZOOM * .85, 0, 0, VW, VH);
+  drawLiveMap();
   // order marker line
   if (player && player.order && !DEMOF) {
     cx.strokeStyle = 'rgba(140,255,140,0.25)'; cx.lineWidth = 1;
@@ -1409,6 +1535,7 @@ addEventListener('pointerdown', tryMusic, { once: true });
 function endGame(win) {
   if (over) return;
   over = true;
+  if (NET.on && !NET.guest) netBroadcast({ t: 'over', win });
   $('endTitle').textContent = win ? 'VICTORY' : 'DEFEAT';
   $('endSub').textContent = win ? 'THE MAW CORE IS SHATTERED' : 'THE DAWN CORE HAS FALLEN';
   setTimeout(() => $('end').classList.remove('hidden'), 1400);
@@ -1434,7 +1561,8 @@ function heroCard(hk) {
   const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = h.name; d.appendChild(nm);
   const rl = document.createElement('div'); rl.className = 'rl'; rl.textContent = h.role; d.appendChild(rl);
   const ds = document.createElement('div'); ds.className = 'ds'; ds.textContent = h.desc; d.appendChild(ds);
-  d.addEventListener('click', () => startGame(hk));
+  d.dataset.hk = hk;
+  d.addEventListener('click', () => pickHero(hk));
   return d;
 }
 function startGame(hk) {
@@ -1456,7 +1584,7 @@ function startGame(hk) {
     h.lane = i === 0 ? 1 : 2;                      // ally 1 bot lane, ally 2 jungles
     heroes.push(h);
   });
-  const epool = DEMOF ? ['ravener', 'corwen', 'liora'] : all.sort(() => Math.random() - .5).slice(0, 3);
+  const epool = DEMOF ? ['ravener', 'corwen', 'bastille'] : all.sort(() => Math.random() - .5).slice(0, 3);
   epool.forEach((k, i) => {
     const h = mkHero(1, k, WORLD.w - 380, MID_Y + (i - 1) * 80);
     h.lane = i;                                     // top / bot / jungle
@@ -1475,9 +1603,9 @@ function startGame(hk) {
     });
     // two minion packs already colliding at the altar
     for (const team of [0, 1]) {
-      for (let i = 0; i < 6; i++) {
-        const d = MINIONS[team][i < 4 ? 0 : 1];
-        const u = mkUnit(team, d.key, ALTAR.x + (team === 0 ? -1 : 1) * (150 + Math.random() * 120), ALTAR.y - 150 + i * 52 + (Math.random() - .5) * 40, d);
+      for (let i = 0; i < 4; i++) {
+        const d = MINIONS[team][i % 2];
+        const u = mkUnit(team, d.key, ALTAR.x + (team === 0 ? -1 : 1) * (170 + Math.random() * 130), ALTAR.y - 130 + i * 86 + (Math.random() - .5) * 50, d);
         u.order = { x: ALTAR.x + (team === 0 ? 60 : -60), y: u.y };
         units.push(u);
       }
@@ -1503,4 +1631,221 @@ function startGame(hk) {
   if (DEMOF) startGame('liora');
   else $('pick').classList.remove('hidden');
   requestAnimationFrame(ts => { last = ts; requestAnimationFrame(frame); });
+})();
+
+/* ============================ multiplayer ============================
+ * Host-authoritative 3v3 co-op on PeerJS (the proven HALCYON FRONT netcode
+ * pattern): guests send intent commands, the host runs the only real sim and
+ * broadcasts 10 Hz snapshots plus a one-shot event queue for casts/attacks/
+ * damage numbers. Guests interpolate positions and replay the fx locally. */
+function netSend(o) { if (NET.conn) { try { NET.conn.send(o); } catch (e) {} } }
+function netBroadcast(o) { for (const c of NET.conns) { try { c.send(o); } catch (e) {} } }
+function unitById(id) { return units.find(u => u.id === id); }
+function tryCast(i, x, y) {
+  if (NET.guest) { netSend({ t: 'cast', i, x: Math.round(x), y: Math.round(y) }); return; }
+  castAbility(player, i, x, y);
+}
+function mpStatus(t) { const el = $('mpInfo'); if (el) el.textContent = t; }
+
+function sendSnap() {
+  const snap = {
+    t: 'snap', tm: Math.round(time * 100) / 100, gold,
+    u: units.filter(u => !u.dead).map(u => [u.id, u.team, u.key, Math.round(u.x), Math.round(u.y),
+      Math.round(u.face * 100) / 100, Math.ceil(u.hp), u.maxHp, u.level || 0, u.moving ? 1 : 0,
+      u.hkey || '', u.sh > 0 ? Math.round(u.sh) : 0, u.buff || '', u.kind]),
+    tw: towers.map(t2 => Math.ceil(t2.hp)),
+    al: [Math.round(ALTAR.prog * 100) / 100, ALTAR.owner, ALTAR.capTeam, Math.round((ALTAR.lockT - time) * 10) / 10],
+    seats: NET.conns.map(c => {
+      const h = c.__hero;
+      return h ? { hid: h.id, cd: h.abCd.map(x => Math.max(0, Math.round((x - time) * 10) / 10)),
+        dead: !!h.dead, rt: Math.max(0, Math.round(((h.respT || 0) - time) * 10) / 10), lv: h.level, xp: h.xp } : null;
+    }),
+    e: NET.evq,
+  };
+  NET.evq = [];
+  netBroadcast(snap);
+}
+function applyCmd(d, c) {
+  const h = c.__hero;
+  if (!h || h.dead) return;
+  if (d.t === 'order') orderFor(h, clamp(+d.x || 0, 0, WORLD.w), clamp(+d.y || 0, 0, WORLD.h));
+  else if (d.t === 'cast') castAbility(h, Math.min(3, Math.max(0, d.i | 0)), clamp(+d.x || h.x, 0, WORLD.w), clamp(+d.y || h.y, 0, WORLD.h));
+  else if (d.t === 'recall') { if (!h.recallT) h.recallT = time + 4; }
+  else if (d.t === 'stop') { h.order = null; h.target = null; }
+}
+
+/* ------------------------------ guest sim ------------------------------ */
+function netLerp(dt) {
+  for (const u of units) {
+    if (u.dead || u.nx === undefined) continue;
+    const k = Math.min(1, dt * 10);
+    u.x += (u.nx - u.x) * k; u.y += (u.ny - u.y) * k;
+    u.moving = !!u.movingNet;
+  }
+}
+function guestMkFromSnap(a) {
+  const [id, team, key, x, y, face, hp, maxHp, level, mov, hkey, sh, buff, kind] = a;
+  let u;
+  if (hkey && HEROES[hkey]) { u = mkHero(team, hkey, x, y); u.level = level || 1; }
+  else u = mkUnit(team, key, x, y, { hp: maxHp, dmg: 0, range: 60, speed: 120, r: kind === 'monster' ? 16 : 12, cd: 1 }, kind);
+  u.id = id; u.hp = hp; u.maxHp = maxHp; u.face = face;
+  return u;
+}
+function applySnap(d) {
+  time = d.tm; gold = d.gold;
+  const seen = new Set();
+  for (const a of d.u) {
+    let u = unitById(a[0]);
+    if (!u) {
+      u = guestMkFromSnap(a);
+      units.push(u);
+      if (u.kind === 'hero') heroes.push(u);
+      if (u.id === NET.myHid) { player = u; onGuestPlayerReady(); }
+    }
+    if (u.nx === undefined || Math.hypot(a[3] - u.x, a[4] - u.y) > 240) { u.x = a[3]; u.y = a[4]; }
+    u.nx = a[3]; u.ny = a[4]; u.face = a[5]; u.hp = a[6]; u.maxHp = a[7];
+    u.level = a[8] || u.level; u.movingNet = a[9]; u.sh = a[11]; u.buff = a[12] || null;
+    if (u.dead) { u.dead = false; }
+    u.netSeen = true;
+    seen.add(u.id);
+  }
+  for (const u of units) if (!seen.has(u.id) && !u.dead) { u.dead = true; if (u.netSeen) boom(u); }
+  units = units.filter(u => !(u.dead && !u.netSeen && u.kind !== 'hero'));
+  d.tw.forEach((hp2, i) => { const t2 = towers[i]; if (!t2) return; if (t2.hp > 0 && hp2 <= 0) boomTower(t2); t2.hp = hp2; });
+  ALTAR.prog = d.al[0]; ALTAR.owner = d.al[1]; ALTAR.capTeam = d.al[2]; ALTAR.lockT = time + d.al[3];
+  const se = d.seats[NET.seat - 1];
+  if (se && player) {
+    player.abCd = se.cd.map(x => time + x);
+    player.dead = se.dead; player.respT = time + se.rt; player.level = se.lv; player.xp = se.xp;
+    const rp = $('respawn');
+    if (se.dead) { rp.classList.remove('hidden'); const b = rp.querySelector('b'); if (b) b.textContent = Math.max(1, Math.ceil(se.rt)); }
+    else rp.classList.add('hidden');
+  }
+  for (const e of d.e) {
+    if (e[0] === 'fx') fxPush(e[1]);
+    else if (e[0] === 'cast') { const u = unitById(e[1]); if (u) castAbility(u, e[2], e[3], e[4], true); }
+    else if (e[0] === 'atk') {
+      const u = unitById(e[1]); const t2 = unitById(e[2]) || towers.find(x => x.id === e[2]);
+      if (u && t2) { u.face = Math.atan2(t2.y - u.y, t2.x - u.x); u.atkT = time; fireFx(u, t2); }
+    }
+    else if (e[0] === 'twr') { const tw = towers[e[1]], t2 = unitById(e[2]); if (tw && t2) towerFx(tw, t2); }
+    else if (e[0] === 'feed') feed(String(e[1]).slice(0, 120));
+  }
+}
+
+/* ------------------------------ lobby flow ------------------------------ */
+function pickHero(hk) {
+  if (MODE === 'guest') {
+    if ((NET.taken || []).includes(hk)) { mpStatus(hk.toUpperCase() + ' is taken — pick another legend.'); return; }
+    netSend({ t: 'pick', hk });
+    mpStatus('Locked ' + hk.toUpperCase() + ' — waiting for the host to start…');
+  } else if (MODE === 'host') {
+    NET.myHk = hk;
+    if (!NET.peer) netHost();
+    else mpStatus('You will play ' + hk.toUpperCase() + '. ROOM ' + roomCode + ' — press START when allies are in.');
+  } else startGame(hk);
+}
+function markTaken() {
+  document.querySelectorAll('#heroes .hc').forEach(el => {
+    el.style.opacity = (NET.taken || []).includes(el.dataset.hk) ? .35 : 1;
+  });
+}
+function netHost() {
+  if (typeof Peer === 'undefined') { mpStatus('Multiplayer needs internet (connection library failed to load).'); return; }
+  roomCode = '' + Math.floor(1000 + Math.random() * 9000);
+  mpStatus('Creating room…');
+  NET.peer = new Peer('duskveil-' + roomCode, ICE);
+  NET.peer.on('open', () => { mpStatus('ROOM CODE: ' + roomCode + ' — you play ' + NET.myHk.toUpperCase() + '. Send the code to up to 2 allies, then press START.'); $('mpStart').style.display = 'inline-block'; });
+  NET.peer.on('error', e => mpStatus('Connection error (' + e.type + ') — reload and try again.'));
+  NET.peer.on('connection', c => {
+    if (started || NET.conns.length >= 2) { try { c.close(); } catch (e) {} return; }
+    c.on('open', () => {
+      NET.conns.push(c); c.__seat = NET.conns.length;
+      c.send({ t: 'lobby', taken: [NET.myHk, ...NET.conns.map(x => x.__hk).filter(Boolean)] });
+      mpStatus('ROOM ' + roomCode + ' — ' + NET.conns.length + ' ally joined. Press START when ready.');
+    });
+    c.on('data', d => {
+      if (!d || !d.t) return;
+      if (d.t === 'pick' && !started) { c.__hk = String(d.hk).slice(0, 24); mpStatus('ROOM ' + roomCode + ' — ally locked ' + c.__hk.toUpperCase() + '. Press START.'); }
+      else if (started) applyCmd(d, c);
+    });
+    c.on('close', () => {
+      const i = NET.conns.indexOf(c);
+      if (i >= 0 && !started) { NET.conns.splice(i, 1); mpStatus('An ally left. ROOM ' + roomCode); }
+      if (started && c.__hero) { c.__hero.human = false; feed('An ally lost connection — the AI takes over.'); }
+    });
+  });
+}
+function netStartMatch() {
+  if (started || !NET.conns.length || !NET.myHk) return;
+  NET.on = true;
+  startGame(NET.myHk);
+  const allyHeroes = heroes.filter(h => h.team === 0 && h !== player);
+  NET.conns.forEach((c, i) => {
+    let h = allyHeroes[i];
+    if (!h) return;
+    if (c.__hk && c.__hk !== h.hkey && HEROES[c.__hk]) {
+      const nh = mkHero(0, c.__hk, h.x, h.y);
+      nh.lane = h.lane; nh.id = h.id;
+      units[units.indexOf(h)] = nh; heroes[heroes.indexOf(h)] = nh; h = nh;
+      heroStat(h); h.hp = h.maxHp;
+    }
+    h.human = true; c.__hero = h;
+    c.send({ t: 'start', hk: h.hkey, hid: h.id, seat: c.__seat });
+  });
+  sendSnap();
+}
+function netJoin() {
+  const code = ($('mpCode').value || '').trim();
+  if (code.length < 4) { mpStatus('Enter the 4-digit room code.'); return; }
+  if (NET.peer) return;
+  if (typeof Peer === 'undefined') { mpStatus('Multiplayer needs internet (connection library failed to load).'); return; }
+  mpStatus('Connecting…');
+  NET.peer = new Peer(ICE);
+  NET.peer.on('error', e => {
+    mpStatus(e.type === 'peer-unavailable' ? 'Room not found — check the code.' : 'Connection error (' + e.type + ') — reload and try again.');
+    try { NET.peer.destroy(); } catch (_) {}
+    NET.peer = null;
+  });
+  NET.peer.on('open', () => {
+    const c = NET.peer.connect('duskveil-' + code, { reliable: true });
+    NET.conn = c;
+    c.on('open', () => { NET.guest = true; NET.on = true; MODE = 'guest'; mpStatus('Connected — pick your legend.'); });
+    c.on('data', onGuestData);
+    c.on('close', () => {
+      if (started && !over) { over = true; $('endTitle').textContent = 'DISCONNECTED'; $('endSub').textContent = 'THE HOST LEFT THE FIELD'; $('end').classList.remove('hidden'); }
+      else mpStatus('Connection closed.');
+    });
+  });
+}
+function onGuestData(d) {
+  if (!d || !d.t) return;
+  if (d.t === 'lobby') { NET.taken = d.taken || []; markTaken(); }
+  else if (d.t === 'start') { NET.myHid = d.hid; NET.seat = d.seat; guestBegin(d.hk); }
+  else if (d.t === 'snap') { if (started) applySnap(d); }
+  else if (d.t === 'over') endGame(!!d.win);
+}
+function guestBegin(hk) {
+  $('pick').classList.add('hidden');
+  for (const el of ['top', 'plate', 'bar', 'mm', 'feed']) $(el).classList.remove('hidden');
+  stage();
+  units = []; heroes = []; corpses = [];
+  player = null; started = true;
+  NET.pendingHk = hk;
+  feed('Match started — hold the lane with your allies.');
+  tryMusic();
+}
+function onGuestPlayerReady() {
+  player.human = true;
+  bindBar();
+  $('portrait').style.backgroundImage = 'url(assets/portraits/' + player.hkey + '.jpg)';
+}
+(function wireLobby() {
+  const b = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
+  const hl = id => ['mSolo','mHost','mJoin'].forEach(x => { const el = $(x); if (el) el.classList.toggle('on', x === id); });
+  b('mSolo', () => { MODE = 'solo'; hl('mSolo'); mpStatus('Pick a legend to enter the lane.'); });
+  b('mHost', () => { MODE = 'host'; hl('mHost'); mpStatus('Pick YOUR legend — a room code will appear for your allies.'); });
+  b('mJoin', () => { MODE = 'join'; hl('mJoin'); $('mpCode').style.display = 'inline-block'; $('mpGo').style.display = 'inline-block'; mpStatus('Enter the room code from the host.'); });
+  b('mpGo', netJoin);
+  b('mpStart', netStartMatch);
 })();

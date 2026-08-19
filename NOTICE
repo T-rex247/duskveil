@@ -1,0 +1,5 @@
+DUSKVEIL incorporates gameplay logic adapted from:
+- LeagueSandbox/GameServer (AGPL-3.0) — https://github.com/LeagueSandbox/GameServer
+- Karmel0x/LeagueEmulatorJS (GPL-3.0) — https://github.com/Karmel0x/LeagueEmulatorJS
+Per AGPL-3.0, the complete corresponding source of this game's code is public at
+this repository. Art assets are separate, proprietary works (see README).
