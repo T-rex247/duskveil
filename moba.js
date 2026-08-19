@@ -1448,7 +1448,29 @@ function drawUnit(u) {
     cx.restore();
   }
   u.moving = false;                                       // consumed by stepUnit next tick
+  if (u.kind === 'hero') {
+    // radial underglow in the hero's faction light — makes every champion pop (Tee)
+    cx.save(); cx.globalCompositeOperation = 'lighter';
+    const gl = cx.createRadialGradient(sx, sy, 4, sx, sy, size * 0.62 * ZOOM);
+    const lrgb2 = u === player ? '255,225,150' : TEAM[u.team].light;
+    gl.addColorStop(0, 'rgba(' + lrgb2 + ',0.30)'); gl.addColorStop(0.6, 'rgba(' + lrgb2 + ',0.10)'); gl.addColorStop(1, 'rgba(' + lrgb2 + ',0)');
+    cx.fillStyle = gl; cx.beginPath(); cx.arc(sx, sy, size * 0.62 * ZOOM, 0, TAU); cx.fill();
+    cx.restore();
+  }
   drawSheet(u, sheet, size, hFlip);
+  if (u.kind === 'hero') {
+    // rim-light silhouette pass: redraw the sheet edge-lit in the faction colour
+    const an2 = ANIMS[u.key]; const rs = an2 && (an2[(time - u.atkT < 0.4 && an2.attack) ? 'attack' : (an2.walk && false ? 'walk' : 'idle')] || an2.idle);
+    if (rs) {
+      const fi2 = Math.floor((time * rs.fps + u.vPhase * rs.n)) % rs.n;
+      cx.save(); cx.globalCompositeOperation = 'lighter'; cx.globalAlpha = 0.22 + 0.12 * Math.sin(time * 3 + u.vPhase * 6);
+      const lrgb3 = u === player ? '255,235,180' : TEAM[u.team].light;
+      cx.translate(sx, sy); cx.scale(ZOOM, ZOOM); if ((Math.cos(u.face) < 0)) cx.scale(-1, 1);
+      cx.drawImage(rs.img, fi2 * rs.fw, 0, rs.fw, rs.fh, -size / 2 - 1, -size / 2, size + 2, size);
+      cx.globalCompositeOperation = 'source-atop'; cx.fillStyle = 'rgba(' + lrgb3 + ',0.5)'; cx.fillRect(-size / 2, -size / 2, size, size);
+      cx.restore();
+    }
+  }
   // shield ring
   if (u.sh > 0) {
     cx.save(); cx.globalCompositeOperation = 'lighter';
