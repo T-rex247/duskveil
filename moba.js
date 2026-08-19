@@ -50,6 +50,13 @@ const FX_SHEETS = ['fx_hit_gold', 'fx_hit_cyan', 'fx_hit_ember', 'fx_muzzle_gold
   'fx_death_dawnmarch', 'fx_death_vectra', 'fx_death_mawborn', 'fx_proj_lightarrow', 'fx_proj_ionbolt_v3',
   'fx_proj_shell_v3', 'fx_proj_emberspit', 'fx_ability_finallight', 'fx_ability_daybreak'];
 const PLATE_FILES = { keep: 'dawnmarch_keep', tower_d: 'dawnmarch_watchtower', spire: 'mawborn_brimstonespire', heart: 'mawborn_pitheart' };
+const TILE_FILES = {
+  meadow: 'ground_meadowstone', dirt: 'ground_neutraldirt', cratered: 'ground_cratered',
+  crystal_rich: 'crystal_rich_256', crystal_full: 'crystal_full_256',
+  rock: 'doodad_rockoutcrop_256', tree: 'doodad_deadtree_256',
+  ruins: 'doodad_ruinpillars_256', bones: 'doodad_bonespire_256',
+};
+const TILES = {};
 
 function loadImg(src) {
   return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
@@ -81,6 +88,9 @@ async function loadAll() {
       tick();
     })());
   }
+  for (const [k, f] of Object.entries(TILE_FILES)) {
+    jobs.push(loadImg(`assets/tiles/${f}.png`).then(i => { TILES[k] = i; }).catch(() => {}));
+  }
   for (const [k, f] of Object.entries(PLATE_FILES)) {
     jobs.push(loadImg(`assets/plates/${f}.png`).then(i => { PLATES[k] = i; tick(); }).catch(tick));
   }
@@ -106,7 +116,7 @@ function feathered(sheet, key) {
   FEATHERED[key] = c;
   return c;
 }
-const FX_F0 = { fx_hit_gold: 2, fx_hit_cyan: 2, fx_hit_ember: 2 };
+const FX_F0 = { fx_hit_gold: 2, fx_hit_cyan: 2, fx_hit_ember: 2, fx_ability_daybreak: 2, fx_ability_finallight: 2, fx_death_dawnmarch: 1, fx_death_vectra: 1, fx_death_mawborn: 1 };
 
 /* ============================ heroes ============================ */
 const HEROES = {
@@ -292,6 +302,9 @@ function dealDamage(t, amt, src) {
   if (t.hp === undefined || t.dead) return;
   if (t.sh > 0) { const a = Math.min(t.sh, amt); t.sh -= a; amt -= a; }
   t.hp -= amt; t.hitT = time;
+  if (amt >= 1) fxPush({ kind: 'dmg', x: t.x + (Math.random() - .5) * 18, y: t.y - (t.r || 20) - 10,
+    vy: -46, life: .85, max: .85, amt: Math.round(amt),
+    c: (src === player) ? '255,243,208' : (t === player ? '255,120,100' : '210,218,232') });
   if (t.r !== undefined && t.kind) {                        // unit knockback
     const a = Math.atan2(t.y - (src ? src.y : t.y), t.x - (src ? src.x : t.x - 1));
     t.kbx = Math.cos(a) * 5; t.kby = Math.sin(a) * 5; t.kbT = time;
@@ -847,6 +860,9 @@ function feed(t) {
   const f = $('feed');
   const d = document.createElement('div');
   d.textContent = t;
+  if (/Your ally|You /.test(t)) d.className = 't0';
+  else if (/Enemy|slain by your ally/.test(t)) d.className = 't1';
+  if (/gold|ALTAR/.test(t)) d.className += ' gold';
   f.appendChild(d);
   while (f.children.length > 4) f.removeChild(f.firstChild);
   setTimeout(() => { if (d.parentNode) d.parentNode.removeChild(d); }, 6000);
@@ -854,6 +870,8 @@ function feed(t) {
 function paintHud() {
   $('tGold').textContent = gold;
   $('tLvl').textContent = player.level;
+  $('plvl').textContent = player.level;
+  $('deathveil').style.opacity = player.dead ? '1' : '0';
   $('tKD').textContent = kills + '/' + deaths;
   const m = Math.floor(time / 60), s = Math.floor(time % 60);
   $('tClock').textContent = m + ':' + (s < 10 ? '0' : '') + s;
@@ -869,64 +887,105 @@ function paintHud() {
 /* ============================ ground ============================ */
 let ground = null;
 function buildGround() {
+  /* Tiled, painted ground (the R1 panel called the old procedural blobs a
+   * graybox). HALCYON tile art, graded to dusk: meadowstone base multiplied
+   * toward cold blue, dirt-stone lanes with feathered edges, darker jungle
+   * with dead trees and rocks, a crystal altar centerpiece, cratered camp
+   * clearings, rock-lined map edges. Deterministic placement (seeded). */
   ground = document.createElement('canvas');
   const S = 0.5;
   ground.width = WORLD.w * S; ground.height = WORLD.h * S;
   const g = ground.getContext('2d');
   g.scale(S, S);
-  // dusk field: cool blue-grey, warmer toward MAW side
-  const base = g.createLinearGradient(0, 0, WORLD.w, 0);
-  base.addColorStop(0, '#2a3140'); base.addColorStop(0.5, '#272d3a'); base.addColorStop(1, '#33262a');
-  g.fillStyle = base; g.fillRect(0, 0, WORLD.w, WORLD.h);
-  // mottle
-  for (let i = 0; i < 1600; i++) {
-    const x = Math.random() * WORLD.w, y = Math.random() * WORLD.h, r = 6 + Math.random() * 22;
-    g.fillStyle = 'rgba(' + (x > WORLD.w / 2 ? '60,40,36' : '40,52,66') + ',' + (0.03 + Math.random() * 0.05) + ')';
-    g.beginPath(); g.ellipse(x, y, r * (1 + Math.random()), r * 0.6, Math.random() * 3, 0, TAU); g.fill();
-  }
-  // jungle: darker everywhere except the lanes and base plazas
-  g.fillStyle = 'rgba(12,16,20,0.40)';
-  g.fillRect(0, 0, WORLD.w, WORLD.h);
-  for (let i = 0; i < 700; i++) {
-    const x = Math.random() * WORLD.w, y = Math.random() * WORLD.h;
-    g.fillStyle = 'rgba(20,30,26,' + (0.15 + Math.random() * 0.25) + ')';
-    g.beginPath(); g.arc(x, y, 8 + Math.random() * 28, 0, TAU); g.fill();
-  }
-  // roads: two lanes + base plazas + short ramps
-  const road = (x0, y0, w, h) => {
-    g.fillStyle = '#3d4150'; g.fillRect(x0, y0, w, h);
-    const lg = g.createLinearGradient(0, y0, 0, y0 + h);
-    lg.addColorStop(0, 'rgba(0,0,0,0.35)'); lg.addColorStop(0.5, 'rgba(255,235,200,0.07)'); lg.addColorStop(1, 'rgba(0,0,0,0.35)');
-    g.fillStyle = lg; g.fillRect(x0, y0, w, h);
-    for (let i = 0; i < (w * h) / 4200; i++) {
-      const x = x0 + Math.random() * w, y = y0 + Math.random() * h;
-      g.fillStyle = 'rgba(' + (Math.random() > .5 ? '70,74,88' : '52,56,68') + ',' + (0.4 + Math.random() * .4) + ')';
-      g.beginPath(); g.ellipse(x, y, 14 + Math.random() * 22, 9 + Math.random() * 14, Math.random(), 0, TAU); g.fill();
-    }
+  let seed = 1337;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const T = 512;
+  // 1. base: meadowstone everywhere
+  if (TILES.meadow) for (let y = 0; y < WORLD.h; y += T) for (let x = 0; x < WORLD.w; x += T) g.drawImage(TILES.meadow, x, y, T, T);
+  // dusk grade: cool multiply, warmer on the MAW side
+  g.globalCompositeOperation = 'multiply';
+  const gr = g.createLinearGradient(0, 0, WORLD.w, 0);
+  gr.addColorStop(0, '#8d99b5'); gr.addColorStop(0.55, '#7e88a2'); gr.addColorStop(1, '#a08477');
+  g.fillStyle = gr; g.fillRect(0, 0, WORLD.w, WORLD.h);
+  g.globalCompositeOperation = 'source-over';
+  // 2. jungle bands: darker + mottled
+  for (const [y0, y1] of [[0, 440], [MID_Y - 240 > 460 ? 0 : 0, 0]]) { /* top handled below */ }
+  const darkBand = (yTop, yBot, a) => {
+    const gg = g.createLinearGradient(0, yTop - 90, 0, yTop + 40);
+    // feathered top edge
+    const g2 = g.createLinearGradient(0, yTop - 60, 0, yBot + 60);
+    g2.addColorStop(0, 'rgba(10,14,22,0)');
+    g2.addColorStop(Math.min(0.25, 120 / (yBot - yTop + 120)), 'rgba(10,14,22,' + a + ')');
+    g2.addColorStop(1 - Math.min(0.25, 120 / (yBot - yTop + 120)), 'rgba(10,14,22,' + a + ')');
+    g2.addColorStop(1, 'rgba(10,14,22,0)');
+    g.fillStyle = g2; g.fillRect(0, yTop - 60, WORLD.w, yBot - yTop + 120);
   };
-  for (const y of LANES) road(560, y - 110, WORLD.w - 1120, 220);
-  road(120, MID_Y - 240, 520, 480);                 // dawn base plaza
-  road(WORLD.w - 640, MID_Y - 240, 520, 480);        // maw base plaza
-  for (const t2 of [0, 1]) for (const y of LANES) {  // diagonal ramps base→lanes
-    const bx = t2 === 0 ? 560 : WORLD.w - 560;
-    g.save(); g.strokeStyle = '#3d4150'; g.lineWidth = 150; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(bx + (t2 === 0 ? 20 : -20), MID_Y); g.lineTo(bx + (t2 === 0 ? 260 : -260), y); g.stroke();
-    g.restore();
+  darkBand(0, LANES[0] - 150, 0.34);
+  darkBand(LANES[0] + 150, LANES[1] - 150, 0.30);
+  darkBand(LANES[1] + 150, WORLD.h, 0.34);
+  // un-darken the base plazas
+  g.save(); g.globalCompositeOperation = 'destination-out';
+  for (const bx of [120, WORLD.w - 640]) { g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(bx, MID_Y - 260, 520, 520); }
+  g.restore();
+  // 3. lanes: dirt-stone road with feathered edges
+  const lane = (y) => {
+    if (!TILES.dirt) return;
+    const band = document.createElement('canvas'); band.width = WORLD.w * S; band.height = 240 * S;
+    const bg = band.getContext('2d'); bg.scale(S, S);
+    for (let x = 0; x < WORLD.w; x += T) bg.drawImage(TILES.dirt, x, -rnd() * 200, T, T), bg.drawImage(TILES.dirt, x, 100, T, T);
+    bg.globalCompositeOperation = 'destination-in';
+    const fg = bg.createLinearGradient(0, 0, 0, 240);
+    fg.addColorStop(0, 'rgba(0,0,0,0)'); fg.addColorStop(0.22, 'rgba(0,0,0,1)'); fg.addColorStop(0.78, 'rgba(0,0,0,1)'); fg.addColorStop(1, 'rgba(0,0,0,0)');
+    bg.fillStyle = fg; bg.fillRect(0, 0, WORLD.w, 240);
+    g.drawImage(band, 0, 0, band.width, band.height, 0, y - 120, WORLD.w, 240);
+    g.globalCompositeOperation = 'multiply';
+    g.fillStyle = 'rgba(190,180,190,0.9)';
+    g.fillRect(0, y - 120, WORLD.w, 240);
+    g.globalCompositeOperation = 'source-over';
+  };
+  for (const y of LANES) lane(y);
+  // base plaza roads
+  if (TILES.dirt) for (const bx of [120, WORLD.w - 640]) {
+    for (let y = MID_Y - 240; y < MID_Y + 240; y += T) for (let x = bx; x < bx + 520; x += T)
+      g.drawImage(TILES.dirt, x, y, Math.min(T, bx + 520 - x), Math.min(T, MID_Y + 240 - y));
   }
-  // the altar clearing
-  road(ALTAR.x - 170, ALTAR.y - 130, 340, 260);
-  g.strokeStyle = 'rgba(255,233,168,0.35)'; g.lineWidth = 6;
-  g.beginPath(); g.arc(ALTAR.x, ALTAR.y, ALTAR.r, 0, TAU); g.stroke();
-  // camp clearings
+  // 4. altar: cratered clearing + crystal centerpiece + emissive glow
+  if (TILES.cratered) { g.save(); g.beginPath(); g.ellipse(ALTAR.x, ALTAR.y, 240, 170, 0, 0, TAU); g.clip(); g.drawImage(TILES.cratered, ALTAR.x - 256, ALTAR.y - 256, 512, 512); g.restore(); }
+  const ag = g.createRadialGradient(ALTAR.x, ALTAR.y, 20, ALTAR.x, ALTAR.y, 260);
+  ag.addColorStop(0, 'rgba(150,220,255,0.30)'); ag.addColorStop(1, 'rgba(150,220,255,0)');
+  g.fillStyle = ag; g.fillRect(ALTAR.x - 260, ALTAR.y - 260, 520, 520);
+  if (TILES.crystal_rich) g.drawImage(TILES.crystal_rich, ALTAR.x - 90, ALTAR.y - 150, 180, 180);
+  // 5. camp clearings
   for (const c of JUNGLE) {
-    g.fillStyle = 'rgba(58,52,44,0.55)';
-    g.beginPath(); g.ellipse(c.x, c.y, 120, 80, 0, 0, TAU); g.fill();
+    if (TILES.cratered) { g.save(); g.beginPath(); g.ellipse(c.x, c.y, 150, 100, 0, 0, TAU); g.clip(); g.globalAlpha = 0.85; g.drawImage(TILES.cratered, c.x - 256, c.y - 256, 512, 512); g.restore(); g.globalAlpha = 1; }
+    if (c.big && TILES.bones) g.drawImage(TILES.bones, c.x + 90, c.y - 150, 150, 150);
   }
+  // 6. doodads: trees + rocks in the jungle, ruins accents, rock-lined edges
+  const put = (img, x, y, s2) => { if (img) g.drawImage(img, x - s2 / 2, y - s2, s2, s2); };
+  for (let i = 0; i < 46; i++) {
+    const x = 200 + rnd() * (WORLD.w - 400);
+    const zone = rnd();
+    let y;
+    if (zone < 0.36) y = 90 + rnd() * (LANES[0] - 280);
+    else if (zone < 0.72) y = LANES[0] + 210 + rnd() * (LANES[1] - LANES[0] - 420);
+    else y = LANES[1] + 210 + rnd() * (WORLD.h - LANES[1] - 300);
+    if (Math.abs(x - ALTAR.x) < 320 && Math.abs(y - ALTAR.y) < 260) continue;
+    if (Math.abs(y - MID_Y) < 280 && (x < 700 || x > WORLD.w - 700)) continue;
+    put(rnd() < 0.62 ? TILES.tree : TILES.rock, x, y, 130 + rnd() * 110);
+  }
+  put(TILES.ruins, 760, LANES[0] - 190, 200); put(TILES.ruins, WORLD.w - 760, LANES[1] + 240, 200);
+  // map edges: rocks + vignette
+  for (let x = 80; x < WORLD.w; x += 260 + rnd() * 120) { put(TILES.rock, x, 70 + rnd() * 30, 170); put(TILES.rock, x + 90, WORLD.h - 6 - rnd() * 20, 180); }
+  g.globalCompositeOperation = 'multiply';
+  const vg = g.createRadialGradient(WORLD.w / 2, WORLD.h / 2, WORLD.h * 0.55, WORLD.w / 2, WORLD.h / 2, WORLD.w * 0.62);
+  vg.addColorStop(0, '#ffffff'); vg.addColorStop(1, '#5a637a');
+  g.fillStyle = vg; g.fillRect(0, 0, WORLD.w, WORLD.h);
+  g.globalCompositeOperation = 'source-over';
   // team ground glow near cores
   for (const [x, rgb] of [[190, '90,140,255'], [WORLD.w - 190, '255,110,80']]) {
-    const rg = g.createRadialGradient(x, LANE_Y, 40, x, LANE_Y, 420);
-    rg.addColorStop(0, 'rgba(' + rgb + ',0.20)'); rg.addColorStop(1, 'rgba(' + rgb + ',0)');
-    g.fillStyle = rg; g.fillRect(x - 420, LANE_Y - 420, 840, 840);
+    const rg2 = g.createRadialGradient(x, MID_Y, 40, x, MID_Y, 420);
+    rg2.addColorStop(0, 'rgba(' + rgb + ',0.20)'); rg2.addColorStop(1, 'rgba(' + rgb + ',0)');
+    g.fillStyle = rg2; g.fillRect(x - 420, MID_Y - 420, 840, 840);
   }
 }
 
@@ -1087,9 +1146,9 @@ function drawFxAll() {
     if (f.kind === 'laser') {
       const x1 = (f.x1 - camX) * ZOOM, y1 = (f.y1 - camY) * ZOOM, x2 = (f.x2 - camX) * ZOOM, y2 = (f.y2 - camY) * ZOOM;
       cx.lineCap = 'round';
-      cx.globalAlpha = a * .3; cx.strokeStyle = f.c; cx.lineWidth = 9 * ZOOM;
+      cx.globalAlpha = a * .32; cx.strokeStyle = f.c; cx.lineWidth = 12 * ZOOM;
       cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
-      cx.globalAlpha = a * .85; cx.lineWidth = 3.4 * ZOOM;
+      cx.globalAlpha = a * .85; cx.lineWidth = 4.4 * ZOOM;
       cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
       cx.strokeStyle = '#fff'; cx.globalAlpha = a; cx.lineWidth = 1.4 * ZOOM;
       cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
@@ -1122,6 +1181,15 @@ function drawFxAll() {
       cx.strokeStyle = 'rgba(255,255,240,' + .8 * a + ')';
       cx.lineWidth = Math.max(1, f.r * .07) * ZOOM;
       cx.beginPath(); cx.arc(sx, sy, rr, 0, TAU); cx.stroke();
+    } else if (f.kind === 'dmg') {
+      cx.globalCompositeOperation = 'source-over';
+      const fs2 = Math.round((f.amt >= 100 ? 17 : 14) * ZOOM);
+      cx.font = '700 ' + fs2 + 'px Rajdhani, sans-serif';
+      cx.textAlign = 'center';
+      cx.lineWidth = 3; cx.strokeStyle = 'rgba(0,0,0,' + (0.85 * a) + ')';
+      cx.strokeText(String(f.amt), sx, sy);
+      cx.fillStyle = 'rgba(' + f.c + ',' + a + ')';
+      cx.fillText(String(f.amt), sx, sy);
     } else if (f.kind === 'ping') {
       cx.strokeStyle = 'rgba(' + f.c + ',' + a + ')'; cx.lineWidth = 2;
       cx.beginPath(); cx.arc(sx, sy, (1 - a) * 26 + 6, 0, TAU); cx.stroke();
@@ -1133,8 +1201,9 @@ function drawMinimap() {
   const m = $('mm'), g = m.getContext('2d');
   const W = m.width, H = m.height;
   g.fillStyle = '#0b0e13'; g.fillRect(0, 0, W, H);
+  if (ground) { g.globalAlpha = 0.85; g.drawImage(ground, 0, 0, ground.width, ground.height, 0, 0, W, H); g.globalAlpha = 1; }
   const sx = W / WORLD.w, sy = H / WORLD.h;
-  g.fillStyle = 'rgba(70,74,90,0.6)';
+  g.fillStyle = 'rgba(70,74,90,0.35)';
   for (const y of LANES) g.fillRect(560 * sx, (y - 110) * sy, (WORLD.w - 1120) * sx, 220 * sy);
   // altar
   g.fillStyle = ALTAR.owner === 0 ? '#ffd98a' : ALTAR.owner === 1 ? '#ff8a6a' : '#8a94a6';
@@ -1174,7 +1243,7 @@ function frame(ts) {
       frame._lastFeed = Math.floor(time);
       for (const team of [0, 1]) for (let i = 0; i < 3; i++) {
         const d = MINIONS[team][i < 2 ? 0 : 1];
-        const u = mkUnit(team, d.key, ALTAR.x + (team === 0 ? -260 : 260) + (Math.random() - .5) * 80, ALTAR.y - 90 + i * 90 + (Math.random() - .5) * 50, d);
+        const u = mkUnit(team, d.key, ALTAR.x + (team === 0 ? -1 : 1) * (240 + Math.random() * 160), ALTAR.y - 170 + Math.random() * 340, d);
         u.order = { x: ALTAR.x + (team === 0 ? 60 : -60), y: u.y };
         units.push(u);
       }
@@ -1209,6 +1278,7 @@ function frame(ts) {
     for (let i = fx.length - 1; i >= 0; i--) {
       const f = fx[i]; f.life -= dt;
       if (f.kind === 'spk') { f.x += f.vx * dt; f.y += f.vy * dt; f.vy += 260 * dt; f.vx *= .9; }
+      else if (f.kind === 'dmg') { f.y += f.vy * dt; f.vy *= 0.93; }
       if (f.life <= 0) fx.splice(i, 1);
     }
     for (let i = sheetFxList.length - 1; i >= 0; i--) if ((time - sheetFxList[i].t0) / sheetFxList[i].dur >= 1) sheetFxList.splice(i, 1);
@@ -1368,15 +1438,16 @@ function startGame(hk) {
   camX = clamp(player.x - VW / ZOOM / 2, 0, WORLD.w - VW / ZOOM);
   camY = clamp((DEMOF ? ALTAR.y : player.y) - VH / ZOOM / 2, 0, WORLD.h - VH / ZOOM);
   bindBar();
+  $('portrait').style.backgroundImage = 'url(assets/portraits/' + hk + '.jpg)';
   started = true;
   feed('Destroy the enemy core. Jungle camps grant buffs.');
   tryMusic();
 }
 
 (async function boot() {
-  buildGround();
   $('loadmsg').textContent = 'Summoning the lane…';
   await loadAll();
+  buildGround();                      // tiles must be loaded first
   $('load').classList.add('hidden');
   const hp = $('heroes');
   for (const hk of Object.keys(HEROES)) hp.appendChild(heroCard(hk));

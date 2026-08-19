@@ -30,8 +30,9 @@
   /* ability bar */
   #bar { position:fixed; left:50%; transform:translateX(-50%); bottom:12px; display:flex; gap:10px;
     z-index:5; align-items:flex-end; }
-  .ab { width:64px; height:64px; border:1px solid var(--line); border-radius:10px; position:relative;
-    background:rgba(13,17,24,.85); cursor:pointer; overflow:hidden; }
+  .ab { width:64px; height:64px; border:1px solid #4a3d22; border-radius:10px; position:relative;
+    background:linear-gradient(180deg,#161b26,#0c1017); cursor:pointer; overflow:hidden;
+    box-shadow:0 0 0 1px #000a, inset 0 1px 0 #ffffff12; }
   .ab .k { position:absolute; top:3px; left:6px; font-weight:700; color:var(--gold2); font-size:13px; text-shadow:0 1px 3px #000; z-index:2; }
   .ab .n { position:absolute; bottom:3px; left:0; right:0; text-align:center; font-size:9px; letter-spacing:.06em; color:var(--dim); z-index:2; }
   .ab .cd { position:absolute; inset:0; background:rgba(5,7,10,.82); display:flex; align-items:center;
@@ -42,7 +43,16 @@
   @keyframes pulse { 0%,100%{ box-shadow:0 0 12px rgba(255,179,71,.25);} 50%{ box-shadow:0 0 26px rgba(255,179,71,.6);} }
 
   /* hp plate */
-  #plate { position:fixed; left:50%; transform:translateX(-50%); bottom:88px; width:340px; z-index:5; }
+  #plate { position:fixed; left:50%; transform:translateX(-50%); bottom:86px; width:430px; z-index:5;
+    display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:12px;
+    background:linear-gradient(180deg,#141924f2,#0b0f16f8); border:1px solid #3a3325;
+    box-shadow:0 0 0 1px #00000088, 0 6px 24px #000c, inset 0 1px 0 #ffffff14; }
+  #portrait { width:56px; height:56px; border-radius:50%; border:2px solid var(--gold); flex:none;
+    background-size:cover; background-position:center 20%; position:relative; box-shadow:0 0 12px #ffb34744; }
+  #plvl { position:absolute; right:-4px; bottom:-4px; background:#0b0f16; border:1px solid var(--gold);
+    color:var(--gold2); font-size:11px; font-weight:700; width:20px; height:20px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; }
+  #bars { flex:1; }
   #hpout { height:14px; border:1px solid #000; background:#191d26; border-radius:4px; overflow:hidden; }
   #hpin { height:100%; width:100%; background:linear-gradient(180deg,#7fe08a,#3f9e4c); transition:width .15s; }
   #xpout { height:4px; background:#191d26; border-radius:3px; margin-top:3px; overflow:hidden; }
@@ -50,12 +60,14 @@
   #plate .lb { display:flex; justify-content:space-between; font-size:11px; color:var(--dim); margin-top:3px; letter-spacing:.08em; }
 
   /* minimap */
-  #mm { position:fixed; left:12px; bottom:12px; width:200px; height:112px; border:1px solid var(--line);
-    border-radius:8px; z-index:5; background:#0b0e13; }
+  #mm { position:fixed; left:12px; bottom:12px; width:210px; height:120px; border:2px solid #4a3d22;
+    border-radius:10px; z-index:5; background:#0b0e13; box-shadow:0 0 0 1px #000, 0 6px 18px #000b; }
 
   /* feed */
   #feed { position:fixed; right:14px; top:52px; z-index:5; font-size:13px; text-align:right; }
-  #feed div { margin-bottom:4px; text-shadow:0 1px 4px #000; opacity:.95; }
+  #feed div { margin-bottom:5px; padding:5px 12px; background:#0d1119e0; border:1px solid #232c3b;
+    border-radius:7px; text-shadow:0 1px 3px #000; display:inline-block; }
+  #feed .t0 { color:#7fb2ff; } #feed .t1 { color:#ff8a7a; } #feed .gold { color:#ffd98a; }
 
   /* mobile ability buttons already covered by #bar; make it bigger touch */
   @media (max-width:700px) {
@@ -104,10 +116,15 @@
   <button id="bExit" title="Exit">&#10005;</button>
 </div>
 
+<div id="deathveil" style="position:fixed;inset:0;z-index:4;pointer-events:none;opacity:0;transition:opacity .5s;
+  background:radial-gradient(120% 120% at 50% 50%, transparent 40%, rgba(120,10,10,.45) 100%);"></div>
 <div id="plate" class="hidden">
+  <div id="portrait"><span id="plvl">1</span></div>
+  <div id="bars">
   <div id="hpout"><div id="hpin"></div></div>
   <div id="xpout"><div id="xpin"></div></div>
   <div class="lb"><span id="lbHp">100/100</span><span id="lbBuff"></span></div>
+  </div>
 </div>
 
 <div id="bar" class="hidden"></div>
