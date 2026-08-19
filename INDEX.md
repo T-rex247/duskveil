@@ -1,3 +1,6 @@
+## OPEN-SOURCE PIVOT (Tee, 2026-08-19): "use all their logic — recreate LoL with my characters"
+Code now PUBLIC at github.com/T-rex247/duskveil under **AGPL-3.0** (Tee accepted open-sourcing; art/characters stay proprietary — assets/ is gitignored, NOTICE + README state the split). This legally unlocks porting LeagueSandbox/LeagueEmulatorJS logic directly. PORTED so far: 30s waves 3 melee+3 caster+siege every 3rd (bounty/xp per type, siege ×2 vs towers), call-for-help sticky minion aggro, tower priority (siege>melee>caster>hero) + hero-protection hold + heat ramp, last-hit gold + presence XP. NEXT to port: fog of war + brush, item/shop system, proper pathfinding, League stat/cooldown formulas. Commit + push every port (the repo is the AGPL compliance).
+
 # duskveil — INDEX
 
 **What:** PROJECT DUSKVEIL — 3v3 MOBA in the HALCYON universe (HUSSL PRODUCTION brand). Single-file canvas engine.

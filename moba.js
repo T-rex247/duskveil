@@ -257,7 +257,7 @@ function heroStat(u) {
   const h = u.hero, l = u.level;
   u.maxHp = h.hp + h.hpG * (l - 1) + itemStat(u, 'hp');
   u.dmg = h.dmg + h.dmgG * (l - 1);
-  if (DEMOF) u.maxHp = Math.round(u.maxHp * (u.kind === 'hero' ? 8 : 3));
+  if (DEMOF) u.maxHp = Math.round(u.maxHp * (u.kind === 'hero' ? (u === player ? 14 : 8) : 3));
 }
 function xpNeed(l) { return Math.round(90 * Math.pow(l, 1.35)); }
 function grantXp(u, amt) {

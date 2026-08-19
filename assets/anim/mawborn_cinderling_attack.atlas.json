@@ -7,7 +7,7 @@
  "frame_h": 192,
  "layout": "horizontal-strip",
  "loop": true,
- "fps": 12,
+ "fps": 20,
  "source_clip_duration_s": 4.064,
  "source_crop": [
   0,

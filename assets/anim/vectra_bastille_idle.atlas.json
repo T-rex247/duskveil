@@ -8,7 +8,7 @@
  "layout": "horizontal-strip",
  "loop": true,
  "hold_last_frame": false,
- "fps": 12,
+ "fps": 10,
  "source_clip_duration_s": 4.042,
  "source_crop": [
   0,
