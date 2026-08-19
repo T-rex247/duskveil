@@ -1219,7 +1219,9 @@ function drawLiveMap() {
     if (!c.big) continue;
     const bx2 = (c.x + 165 - camX) * ZOOM, by2 = (c.y - 75 - camY) * ZOOM;
     if (TILES.bones && bx2 > -160 && by2 > -160 && bx2 < VW + 160 && by2 < VH + 160) {
-      const swy = Math.sin(time * 2.1 + c.x) * 0.03, bsc = 1 + 0.025 * Math.sin(time * 7 + c.y);
+      const swy = Math.sin(time * 2.1 + c.x) * 0.03, bsc = (c.y < MID_Y ? 0.9 : 1.08) * (1 + 0.025 * Math.sin(time * 7 + c.y));
+      cx.save(); cx.translate(bx2, by2 + 62 * ZOOM); cx.scale(ZOOM, ZOOM);
+      cx.fillStyle = 'rgba(0,0,0,0.45)'; cx.beginPath(); cx.ellipse(0, 0, 62, 20, 0, 0, TAU); cx.fill(); cx.restore();
       cx.save(); cx.globalCompositeOperation = 'source-over'; cx.translate(bx2, by2); cx.scale(ZOOM * (c.y < MID_Y ? -1 : 1) * bsc, ZOOM * bsc); cx.rotate(swy);
       cx.drawImage(TILES.bones, -75, -75, 150, 150); cx.restore();
     }
@@ -1495,6 +1497,11 @@ function drawFxAll() {
       cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
       cx.strokeStyle = '#fff'; cx.globalAlpha = a; cx.lineWidth = 1.4 * ZOOM;
       cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
+      cx.globalCompositeOperation = 'lighter';
+      const ig = cx.createRadialGradient(x2, y2, 1, x2, y2, 16 * ZOOM);
+      ig.addColorStop(0, 'rgba(255,255,255,' + a * 0.9 + ')'); ig.addColorStop(0.4, f.c.replace('rgb', 'rgba').replace(')', ',' + a * 0.6 + ')'));
+      ig.addColorStop(1, 'rgba(255,255,255,0)');
+      cx.fillStyle = ig; cx.beginPath(); cx.arc(x2, y2, 16 * ZOOM, 0, TAU); cx.fill();
     } else if (f.kind === 'flash') {
       const fr = (f.r || 9) * ZOOM;
       const g = cx.createRadialGradient(sx, sy, 0, sx, sy, fr);
