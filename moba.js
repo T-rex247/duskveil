@@ -277,17 +277,29 @@ function spawnCamp(c) {
   });
   c.alive = true;
 }
+let waveN = 0;
+/* League wave model (LeagueSandbox lane logic): 3 melee front + 3 casters behind,
+ * every 3rd wave adds a SIEGE minion (fat, ranged, +100% vs towers, big bounty). */
 function spawnWave() {
+  waveN++;
   for (const team of [0, 1]) {
     const x0 = team === 0 ? 380 : WORLD.w - 380;
     for (const lane of [0, 1]) {
-      for (let i = 0; i < 4; i++) {
-        const d = MINIONS[team][i < 3 ? 0 : 1];
-        const u = mkUnit(team, d.key, x0 + (Math.random() - .5) * 50, MID_Y - 50 + i * 34, d);
+      const comp = [];
+      for (let i = 0; i < 3; i++) comp.push({ d: MINIONS[team][0], role: 'melee', gold: 21, xp: 60 });
+      if (waveN % 3 === 0) comp.push({ d: MINIONS[team][0], role: 'siege', gold: 74, xp: 93 });
+      for (let i = 0; i < 3; i++) comp.push({ d: MINIONS[team][1], role: 'caster', gold: 14, xp: 29 });
+      comp.forEach((c, i) => {
+        const st = c.role === 'siege'
+          ? { ...c.d, hp: Math.round(c.d.hp * 3.4), dmg: Math.round(c.d.dmg * 1.7), range: 300, r: 15, cd: 1.4 }
+          : c.d;
+        const u = mkUnit(team, c.d.key, x0 + (Math.random() - .5) * 30, MID_Y - 40 + i * 26, st);
+        u.role = c.role; u.bounty = c.gold; u.xpVal = c.xp;
+        if (c.role === 'siege') u.vScale = 1.4;
         u.path = lanePath(team, lane); u.wp = 0;
         u.order = { ...u.path[0] };
         units.push(u);
-      }
+      });
     }
   }
 }
@@ -324,6 +336,7 @@ function dealDamage(t, amt, src) {
   if (t.hp === undefined || t.dead) return;
   if (t.sh > 0) { const a = Math.min(t.sh, amt); t.sh -= a; amt -= a; }
   t.hp -= amt; t.hitT = time;
+  if (t.kind === 'hero' && src && src.kind) { t.lastHitBy = src; t.lastHitAt = time; }
   const okNum = !t._dmgAt || time - t._dmgAt > 0.18; if (okNum) t._dmgAt = time;
   if (amt >= 1 && okNum) {
     t._dmgSlot = ((t._dmgSlot || 0) + 1) % 3;
@@ -350,8 +363,10 @@ function kill(t, src) {
     }
     const srcHero = src && src.kind === 'hero' ? src : null;
     if (t.kind === 'minion') {
-      if (srcHero) { if (srcHero === player) gold += 22; grantXp(srcHero, 30); }
-      for (const h of heroes) if (!h.dead && h.team !== t.team && dist(h, t) < 550) grantXp(h, 14);
+      if (srcHero && srcHero === player) gold += (t.bounty || 21);            // last-hit gold
+      const near = heroes.filter(h => !h.dead && h.team !== t.team && dist(h, t) < 550);
+      const xpEach = Math.round((t.xpVal || 45) / Math.max(1, near.length) * (near.length > 1 ? 1.3 : 1));
+      for (const h of near) grantXp(h, xpEach);                               // XP needs presence, not last hits
     } else if (t.kind === 'monster') {
       if (srcHero) {
         grantXp(srcHero, 70); if (srcHero === player) gold += 42;
@@ -408,11 +423,11 @@ function towerFx(tw, t) {
   fxPush({ kind: 'flash', x: t.x, y: t.y, life: .12, max: .12, r: 15 });
   sparks(t.x, t.y, Math.atan2(t.y - tw.y, t.x - tw.x), lrgb, 1.2);
 }
-function towerFire(tw, t) {
+function towerFire(tw, t, mul) {
   towerFx(tw, t);
   if (NET.on && !NET.guest && NET.evq.length < 120) NET.evq.push(['twr', towers.indexOf(tw), t.id]);
   tw.cdT = time + 1.1;
-  dealDamage(t, tw.dmg, tw);
+  dealDamage(t, Math.round(tw.dmg * (mul || 1)), tw);
 }
 
 /* ============================ fx ============================ */
@@ -649,7 +664,22 @@ function stepUnit(u, dt) {
   // heroes + minions + brood
   let t = u.target && !u.target.dead && (u.target.hp === undefined || u.target.hp > 0) ? u.target : null;
   if (u.kind !== 'hero') {
-    t = nearestEnemy(u, u.kind === 'brood' ? 420 : 300);
+    /* League acquisition order: (1) enemy hero attacking a nearby ally hero
+     * (call-for-help), (2) nearest enemy minion, (3) nearest enemy hero.
+     * Targets are STICKY and re-evaluated on a timer, not per frame. */
+    if (u.kind === 'minion' && t && time < (u.aggroT || 0)) {
+      // keep the held target
+    } else if (u.kind === 'minion') {
+      u.aggroT = time + 1.5;
+      let pick = null;
+      for (const h of heroes) {
+        if (h.dead || h.team !== u.team) continue;
+        if (dist(u, h) < 450 && h.lastHitBy && !h.lastHitBy.dead && h.lastHitBy.kind === 'hero' && time - (h.lastHitAt || -9) < 3 && dist(u, h.lastHitBy) < 500) { pick = h.lastHitBy; break; }
+      }
+      if (!pick) { let bd2 = u.kind === 'brood' ? 420 : 300; for (const e2 of units) { if (e2.dead || e2.team === u.team || e2.team === 2 || e2.kind === 'hero') continue; const d2 = dist(u, e2); if (d2 < bd2) { bd2 = d2; pick = e2; } } }
+      if (!pick) pick = nearestEnemy(u, 300);
+      t = pick; u.target = pick;
+    } else t = nearestEnemy(u, 420);
     const tw = nearestTower(u, 260);
     if (!t && tw) { // hit towers
       if (dist(u, tw) > u.range + tw.r) moveToward(u, tw.x, tw.y, sp, dt);
@@ -683,6 +713,7 @@ function stepUnit(u, dt) {
   }
 }
 function towerHit(u, tw) {
+  if (u.role === 'siege') { dealDamage(tw, effDmg(u), u); }   // siege: double damage to towers
   const fac = u.key.split('_')[0];
   const lrgb = { dawnmarch: '255,233,168', vectra: '159,232,255', mawborn: '255,150,90' }[fac] || '220,235,255';
   u.face = Math.atan2(tw.y - u.y, tw.x - u.x);
@@ -718,15 +749,36 @@ function separation() {
 }
 function towersThink(dt) {
   for (const tw of towers) {
-    if (tw.hp <= 0 || time < tw.cdT) continue;
-    let best = null, bd = tw.range;
-    for (const t of units) {                                  // minions first
-      if (t.dead || t.team === tw.team || t.team === 2) continue;
-      const pri = t.kind === 'hero' ? 1 : 0;
-      const d = dist(tw, t);
-      if (d < tw.range && (best === null || pri < best.pri || (pri === best.pri && d < bd))) { best = { t, pri }; bd = d; }
+    if (tw.hp <= 0) continue;
+    // League protection rule: an enemy hero who damages an allied hero in range
+    // draws tower aggro and KEEPS it until leaving range or dying.
+    for (const h of heroes) {
+      if (h.dead || h.team !== tw.team || dist(tw, h) > tw.range) continue;
+      const a = h.lastHitBy;
+      if (a && !a.dead && a.kind === 'hero' && time - (h.lastHitAt || -9) < 0.6 && dist(tw, a) < tw.range) { tw.hold = a; tw.heat = 0; }
     }
-    if (best) towerFire(tw, best.t);
+    if (tw.hold && (tw.hold.dead || dist(tw, tw.hold) > tw.range)) { tw.hold = null; tw.heat = 0; }
+    if (time < tw.cdT) continue;
+    let pick = tw.hold || null;
+    if (!pick) {
+      // priority: siege > melee > caster > hero, nearest within class
+      let bestScore = -1, bd = 1e9;
+      for (const t of units) {
+        if (t.dead || t.team === tw.team || t.team === 2) continue;
+        const d = dist(tw, t);
+        if (d > tw.range) continue;
+        const score = t.kind === 'hero' ? 0 : t.role === 'siege' ? 3 : t.role === 'caster' ? 1 : 2;
+        if (score > bestScore || (score === bestScore && d < bd)) { bestScore = score; bd = d; pick = t; }
+      }
+    }
+    if (pick) {
+      // heat ramp: consecutive shots on a hero hit ~37.5% harder, twice
+      if (pick.kind === 'hero') { tw.heat = Math.min(2, (tw.lastT === pick ? (tw.heat || 0) : 0) + (tw.lastT === pick ? 1 : 0)); }
+      else tw.heat = 0;
+      tw.lastT = pick;
+      const mul = pick.kind === 'hero' ? 1 + 0.375 * (tw.heat || 0) : 1;
+      towerFire(tw, pick, mul);
+    }
   }
 }
 function coreOf(team) { return towers.find(t => t.core && t.team === team); }
@@ -1410,7 +1462,7 @@ function frame(ts) {
         if (foe) castAbility(pickc.h, pickc.i, foe.x, foe.y);
       }
     }
-    if (waveT <= 0) { waveT = 26; spawnWave(); }
+    if (waveT <= 0) { waveT = 30; spawnWave(); }
     for (const c of JUNGLE) if (!c.alive && time > c.respawnAt) spawnCamp(c);
     for (const u of units) stepUnit(u, dt);
     separation();
