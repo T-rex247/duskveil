@@ -86,6 +86,15 @@ async function loadAll() {
         } catch (e) { /* missing sheet degrades to idle */ }
         tick();
       })());
+      // DIRECTIONAL sheets (Tee 2026-08-21: "when I move up his body turns, I can see his back — total 360"):
+      // optional `${u}_n_${a}` (back view) and `${u}_s_${a}` (front view). Side view = the base sheet (flipped for west).
+      for (const d of ['n', 's']) jobs.push((async () => {
+        try {
+          const r = await fetch(`assets/anim/${u}_${d}_${a}.atlas.json`); if (!r.ok) return;
+          const meta = await r.json(); const img = await loadImg(`assets/anim/${u}_${d}_${a}.png`);
+          ANIMS[u][d + '_' + a] = { img, n: meta.frame_count, fw: meta.frame_w, fh: meta.frame_h, fps: meta.fps || 12 };
+        } catch (e) {}
+      })());
     }
   }
   for (const f of FX_SHEETS) {
@@ -1953,9 +1962,10 @@ function drawSheet(u, sheet, size, hFlip, alpha) {
   if (u.vFace === undefined) u.vFace = u.face;
   let dfc = u.face - u.vFace; while (dfc > Math.PI) dfc -= TAU; while (dfc < -Math.PI) dfc += TAU;
   u.vFace += dfc * M.turn;                                  // turn WEIGHT: low = bruiser, high = assassin
-  cx.transform(1, 0, clamp(dfc, -1.2, 1.2) * 0.09, 1, 0, 0);  // shoulders lead the turn, body lags
-  const lean = clamp(Math.sin(u.vFace) * 0.18, -0.22, 0.22);
-  cx.rotate(u.moving ? lean : Math.cos(u.vFace) * -0.10);
+  const fb = u._dir && u._dir !== 'e';                      // front/back view: no side-lean, no shoulder skew
+  if (!fb) cx.transform(1, 0, clamp(dfc, -1.2, 1.2) * 0.09, 1, 0, 0);  // shoulders lead the turn, body lags
+  const lean = fb ? 0 : clamp(Math.sin(u.vFace) * 0.18, -0.22, 0.22);
+  cx.rotate(u.moving ? lean : (fb ? 0 : Math.cos(u.vFace) * -0.10));
   if (hFlip) cx.scale(-1, 1);
   const hitAge = time - u.hitT;
   const flAge = time - (u._flinch || -9);
@@ -2033,12 +2043,16 @@ function drawUnit(u) {
   const state = ((u.atkPhase === 'WINDUP' || time - u.atkT < 0.34) && anims.attack) ? 'attack'
     : (u.moving && anims.walk ? 'walk' : 'idle');
   u._atkAnim = state === 'attack';
-  const sheet = anims[state] || anims.idle; if (!sheet) return;
+  // facing → view: back when walking UP the map, front when walking DOWN, side otherwise (west = mirrored side)
+  const sn = Math.sin(u.vFace === undefined ? u.face : u.vFace);
+  const dir = sn < -0.62 && anims['n_idle'] ? 'n' : sn > 0.62 && anims['s_idle'] ? 's' : 'e';
+  const sheet = (dir === 'e' ? anims[state] : (anims[dir + '_' + state] || anims[dir + '_idle'])) || anims[state] || anims.idle; if (!sheet) return;
+  u._dir = dir;
   // bastille v2 (2026-08-21 Grok mech) is tall-normalised by --group; 165 gives the heavy walker its presence
   let size = u.kind === 'hero' ? (isSkinned(u) ? ENEMY_SKIN_SIZE[skinKey(u)] || 130 : u.hkey === 'sovereign' ? 240 : u.hkey === 'bastille' ? 165 : u.hkey === 'korvax' ? 165 : 120)
     : u.kind === 'monster' ? (u.key === 'mawborn_pitbrute' ? 116 : 96) : 84;
   if (u.kind !== 'hero') size = Math.round(size * (u.vScale || 1));
-  const hFlip = (Math.cos(u.face) < 0) !== (u.kind !== 'hero' && u.vMirror && !u.moving && time - u.atkT > 0.5);
+  const hFlip = u._dir && u._dir !== 'e' ? false : (Math.cos(u.face) < 0) !== (u.kind !== 'hero' && u.vMirror && !u.moving && time - u.atkT > 0.5);
   let lift = 0;
   if (u.jump) { const jp = clamp((time - u.jump.t0) / u.jump.dur, 0, 1); lift = Math.sin(jp * Math.PI) * u.jump.h; if (jp >= 1 && NET.guest) u.jump = null; }
   if (u.hkey === 'sovereign') lift += 26;                   // BATTLECRUISER floats above its shadow (Tee 2026-08-21: 'make it float')
