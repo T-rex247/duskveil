@@ -6,7 +6,9 @@ Code now PUBLIC at github.com/T-rex247/duskveil under **AGPL-3.0** (Tee accepted
 
 # duskveil — INDEX
 
-## DIRECTIONAL (360) SHEETS — 2026-08-21 (Tee: 'when I move up his body turns, I can see his back — total 360')
+## DIRECTIONAL (360) SHEETS — 2026-08-21 — now GOLIATH, KORVAX, LIORA, CORWEN, RAVENER, BATTLECRUISER (stern/bow, 384 cells, `DIR_SCALE` evens out the per-group shared scale)
+**GOLIATH E = PLASMA BLADES** (Tee: 'melee laser sword combo, Jedi-like, dual sabers, 5s'): `u.blades` combo engine in tickBastille (left slash · right slash · spin finisher w/ knockback, 0.42s gap, blade-dash to the next victim within 440), blades drawn in drawMechPresence (cyan + red, hum, swing arcs), icon `bastille_2.jpg` regenerated. **GOLIATH R kept as the 'previous' barrage** (Tee) + per-shell `skylaser` targeting lines, 1.45–1.9× shell bodies, re-entry cones, embers/smoke stacks (dome/mushroom tried and reverted).
+ (Tee: 'when I move up his body turns, I can see his back — total 360')
 loadAll also loads optional `${key}_n_${state}` (BACK view) and `${key}_s_${state}` (FRONT view) sheets; drawUnit picks by facing (sin(vFace) < -0.62 → n, > 0.62 → s, else side sheet mirrored for west) and drops the side-lean/shoulder-skew on n/s. Built for GOLIATH: one Grok img2video TURNTABLE clip (`goliath_nano_turn.mp4`, 8s, 'rotates 360° in place') → back still @4.5s, front still @1.5s → 6 img2video clips (`goliath_nano_{n,s}_{idle,walk,attack}`) → `--group vectra_bastille_n|_s`. Recipe to roll to other legends: turntable → pick n/s stills → 6 clips (~$3.4/legend) → `--group`.
 
 ## KORVAX, THE TITAN (6th legend) + fight-scene CGI pass — 2026-08-21
