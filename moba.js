@@ -1918,12 +1918,13 @@ function drawUnit(u) {
   u._atkAnim = state === 'attack';
   const sheet = anims[state] || anims.idle; if (!sheet) return;
   // bastille v2 (2026-08-21 Grok mech) is tall-normalised by --group; 165 gives the heavy walker its presence
-  let size = u.kind === 'hero' ? (u.hkey === 'sovereign' ? 180 : u.hkey === 'bastille' ? 165 : 120)
+  let size = u.kind === 'hero' ? (u.hkey === 'sovereign' ? 240 : u.hkey === 'bastille' ? 165 : 120)
     : u.kind === 'monster' ? (u.key === 'mawborn_pitbrute' ? 116 : 96) : 84;
   if (u.kind !== 'hero') size = Math.round(size * (u.vScale || 1));
   const hFlip = (Math.cos(u.face) < 0) !== (u.kind !== 'hero' && u.vMirror && !u.moving && time - u.atkT > 0.5);
   let lift = 0;
   if (u.jump) { const jp = clamp((time - u.jump.t0) / u.jump.dur, 0, 1); lift = Math.sin(jp * Math.PI) * u.jump.h; if (jp >= 1 && NET.guest) u.jump = null; }
+  if (u.hkey === 'sovereign') lift += 26;                   // BATTLECRUISER floats above its shadow (Tee 2026-08-21: 'make it float')
   u._lift = lift;
   // ground: pool shadow + team ellipse
   cx.save();

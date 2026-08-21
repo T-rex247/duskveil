@@ -6,6 +6,9 @@ Code now PUBLIC at github.com/T-rex247/duskveil under **AGPL-3.0** (Tee accepted
 
 # duskveil — INDEX
 
+## BATTLECRUISER (formerly SOVEREIGN; hkey/assets `sovereign`) — 2026-08-21
+Tee: 'rename the ship to battlecruiser, make it look like [SC2 Battlecruiser ref] with the glowing teal, detailed, floating'. Built an ORIGINAL capital ship in that spirit (IP line held): Grok plate `battlecruiser_2` → clips `battlecruiser_{idle,walk,attack}` (hover bob / engine burn / broadside) → `--group` sheets (old in `_bak_2026-08-21b/`). Draw size 240 + constant `lift` 26 so it floats above its shadow. Walk-clip engine flares inflate the shared bbox (scale 0.276) — hence the bigger draw size.
+
 ## ⭐ GOLIATH (formerly BASTILLE; hkey/assets still `bastille`) v2 — Diablo-grade kit (Tee 2026-08-21: "each ability like a Diablo ability, max impressive; make that robot look awesome")
 Kit rewritten in `moba.js` (HEROES.bastille + `case 'gatling'|'rockets'|'vault'|'orbital'` + `tickBastille()` + `rocketBlast/shellImpact/debris/smokeBurst`):
 - **Q GATLING SALVO** — `u.chan={kind:'gat'}`: 0.22s `spinup` glyph, then a ROOTED 1.1s cone spray (tracer `projectiles` w/ `tracer:true`, 60ms cadence, alternating barrels, brass `casing` fx, recoil `u._recoil`). A move/stop order cancels the channel (Diablo channel rule). `cone` fx = the aim telegraph (follows caster).
