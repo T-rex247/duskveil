@@ -689,6 +689,7 @@ function castAbility(u, i, tx, ty, force) {
   let cdMul = (u.buff === 'WARDLIGHT' ? 0.8 : 1) * (1 - Math.min(0.4, itemStat(u, 'cdr')));
   const ang = Math.atan2(ty - u.y, tx - u.x);
   const capTo = (r) => { const d = Math.hypot(tx - u.x, ty - u.y); if (d > r) { tx = u.x + (tx - u.x) / d * r; ty = u.y + (ty - u.y) / d * r; } };
+  if (ab.ult && ab.range) capTo(Math.min(ab.range, 340));   // Tee 2026-08-21: supers land in the part of the map the character is in — never called down across the map
   switch (ab.type) {
     case 'bolt': {
       u.face = ang;
