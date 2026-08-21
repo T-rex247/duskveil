@@ -41,6 +41,8 @@
   .ab.ult { width:74px; height:74px; }
   .ab.ult.ready-ult { border-color:var(--gold); box-shadow:0 0 18px rgba(255,179,71,.25); }
   .ab.ready-ult { animation:pulse 1.6s infinite; }
+  .ab { transition:box-shadow .12s, border-color .12s; }
+  #bar.cdr .ab { box-shadow:0 0 18px rgba(127,232,255,.8), 0 0 0 1px #9fe8ff; border-color:#9fe8ff; }
   @keyframes pulse { 0%,100%{ box-shadow:0 0 12px rgba(255,179,71,.25);} 50%{ box-shadow:0 0 26px rgba(255,179,71,.6);} }
 
   /* hp plate */
@@ -194,7 +196,7 @@
   </div>
   <div id="mpInfo" style="color:#8a94a6;font-size:12px;letter-spacing:.08em;min-height:16px;margin-bottom:14px;">Pick a legend to enter the lane — or host a room and battle with friends.</div>
   <div id="heroes"></div>
-  <div class="sub">Right-click (or tap) to move and attack · QWER abilities · B recall · Destroy the enemy core.</div>
+  <div class="sub">Right-click (or tap) to move and attack · <b>A</b> attack-move (or shift+right-click) · QWER abilities · S stop · H hold · B recall<br><span style="opacity:.72">Autos have a wind-up: move during the recovery half to stutter-step, but cancel the wind-up and you lose the shot.</span></div>
 </div>
 
 <div id="end" class="ovl hidden">

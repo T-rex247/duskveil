@@ -152,7 +152,7 @@ const HEROES = {
   corwen: {
     key: 'dawnmarch_corwen', name: 'CORWEN', role: 'BLADE LORD', fac: 'dawnmarch', icon: '⚔',
     desc: 'Melee bruiser. Cleaves ranks, charges the backline, and turns the whole field gold when Daybreak spins.',
-    hp: 680, hpG: 84, dmg: 64, dmgG: 9, range: 70, cd: 0.95, speed: 185, r: 17,
+    hp: 680, hpG: 84, dmg: 64, dmgG: 9, range: 70, cd: 0.95, speed: 172, r: 17,   // bruiser: heaviest feet of the melee pair
     abilities: [
       { k: 'Q', name: 'CLEAVE', icon: '⚔', type: 'arc', cd: 5, radius: 160, dmg: l => 85 + 30 * l },
       { k: 'W', name: 'CHARGE', icon: '➤', type: 'dash', cd: 10, range: 430, radius: 100, dmg: l => 60 + 24 * l },
@@ -162,13 +162,20 @@ const HEROES = {
   },
   bastille: {
     key: 'vectra_bastille', name: 'BASTILLE', role: 'WALKER ACE', fac: 'vectra', icon: '⚙',
-    desc: 'Piloted twin-cannon frame. Sustained fire, rocket volleys, and an artillery barrage that erases a screen.',
+    desc: 'Piloted twin-cannon walker. A gatling salvo that saws through a lane, a homing rocket swarm, thruster-vault mobility — and an orbital barrage that turns the ground to fire.',
     hp: 600, hpG: 72, dmg: 46, dmgG: 6, range: 300, cd: 0.62, speed: 168, r: 18,
+    /* BASTILLE KIT v2 (Tee 2026-08-21: "each ability like a Diablo ability — max impressive").
+     * Every ability is a committed, telegraphed, physical event: anticipation → payload → aftermath.
+     *  Q GATLING SALVO  — 0.22s barrel spin-up, then a rooted 1.1s cone-spray of tracers (cancel by moving).
+     *  W ROCKET SWARM   — 7 micro-missiles arc out of the shoulder pods, rain staggered into the zone, last one big.
+     *  E THRUSTER VAULT — jump-jet leap to the cursor, shockwave + knockback on landing, 3.5s overdrive w/ exhaust trail.
+     *  R ORBITAL BARRAGE — anchor-down + laser designator + targeting reticle, then 12 shells rain from orbit; the
+     *                      final shell cracks the ground, knocks enemies back and leaves a burning zone that slows. */
     abilities: [
-      { k: 'Q', name: 'TWIN BURST', icon: '◎', type: 'burst', cd: 6, range: 480, shots: 3, dmg: l => 42 + 16 * l },
-      { k: 'W', name: 'ROCKETS', icon: '♨', type: 'aoe', cd: 10, range: 540, radius: 140, delay: 0.5, dmg: l => 100 + 34 * l },
-      { k: 'E', name: 'OVERDRIVE', icon: '⏩', type: 'haste', cd: 12, dur: 3.5, haste: 1.45 },
-      { k: 'R', name: 'BARRAGE', icon: '☠', type: 'barrage', cd: 65, range: 700, radius: 250, shells: 7, dmg: l => 95 + 45 * l, ult: true },
+      { k: 'Q', name: 'GATLING SALVO', icon: '◎', type: 'gatling', cd: 7, range: 620, dur: 1.1, rate: 0.06, spread: 0.14, dmg: l => 16 + 6 * l },
+      { k: 'W', name: 'ROCKET SWARM', icon: '♨', type: 'rockets', cd: 11, range: 640, radius: 150, count: 7, dmg: l => 34 + 12 * l },
+      { k: 'E', name: 'THRUSTER VAULT', icon: '⏩', type: 'vault', cd: 12, range: 300, dur: 3.5, haste: 1.4, radius: 110, dmg: l => 40 + 14 * l },
+      { k: 'R', name: 'ORBITAL BARRAGE', icon: '☠', type: 'orbital', cd: 70, range: 800, radius: 260, shells: 12, anchor: 0.9, dmg: l => 70 + 30 * l, ult: true },
     ],
   },
   sovereign: {
@@ -185,7 +192,7 @@ const HEROES = {
   ravener: {
     key: 'mawborn_ravener', name: 'RAVENER', role: 'SWARM QUEEN', fac: 'mawborn', icon: '☠',
     desc: 'The pit answers her. Acid, broodlings, a killing lunge — and an orbital brimstone strike called down from the dark.',
-    hp: 580, hpG: 70, dmg: 50, dmgG: 7, range: 260, cd: 0.9, speed: 180, r: 17,
+    hp: 580, hpG: 70, dmg: 50, dmgG: 7, range: 260, cd: 0.9, speed: 186, r: 17,   // assassin: fastest hero on the field
     abilities: [
       { k: 'Q', name: 'ACID SPIT', icon: '☢', type: 'bolt', cd: 4.5, range: 520, dmg: l => 65 + 24 * l, speed: 780 },
       { k: 'W', name: 'BROOD', icon: '♟', type: 'spawn', cd: 16, count: 3, life: 18 },
@@ -194,6 +201,28 @@ const HEROES = {
     ],
   },
 };
+/* ---- per-champion MOTION ARCHETYPE (docs/CHAMPION-MOTION-SPEC.md §4) --------------
+ * The five sliders that carry an archetype with ZERO new art:
+ *   windup  — fraction of the attack cycle spent rooted before the shot lands.
+ *             High = committal artillery, low = twitchy assassin. This is the
+ *             single biggest "which champion am I" lever in the whole game.
+ *   turn    — visualFacing lerp rate. Low = weighty, slow-shouldered bruiser.
+ *   bob     — locomotion bob amplitude (px).
+ *   cadence — foot-plant frequency; 0 means the unit HOVERS (no footfall at all).
+ *   lean    — gait sway amplitude (radians).
+ *   asRamp  — attack-speed spin-up per shot; Bastille only (marksman "reward
+ *             for spacing is speed" — the AS stat becomes visible as animation
+ *             compression rather than a number on a tooltip).
+ * Base HP/damage/range stay where Tee tuned them; these are feel-only. */
+const MOTION = {
+  liora:     { windup: .32, turn: .18, bob: 3.2, cadence: 9.0,  lean: .055, asRamp: 0,   hitstop: .05 },
+  ravener:   { windup: .20, turn: .26, bob: 2.6, cadence: 11.5, lean: .075, asRamp: 0,   hitstop: .045 },
+  corwen:    { windup: .25, turn: .10, bob: 5.0, cadence: 6.6,  lean: .038, asRamp: 0,   hitstop: .08 },
+  bastille:  { windup: .30, turn: .16, bob: 3.6, cadence: 8.4,  lean: .062, asRamp: .12, hitstop: .045 },
+  sovereign: { windup: .35, turn: .07, bob: 4.2, cadence: 0,    lean: .022, asRamp: 0,   hitstop: .07 },
+};
+const MOTION_DEF = { windup: .22, turn: .22, bob: 3.2, cadence: 9, lean: .055, asRamp: 0, hitstop: .05 };
+function motionOf(u) { return (u && u.hkey && MOTION[u.hkey]) || MOTION_DEF; }
 const MINIONS = {
   0: [{ key: 'dawnmarch_squire', hp: 190, dmg: 16, range: 55, speed: 120, r: 12, cd: 1.0 },
       { key: 'dawnmarch_sunbow', hp: 130, dmg: 22, range: 240, speed: 120, r: 11, cd: 1.2 }],
@@ -254,6 +283,8 @@ function mkUnit(team, key, x, y, stats, kind) {
     vScale: 0.9 + Math.random() * 0.22, vMirror: Math.random() < 0.5,
     order: null, target: null, sh: 0, shT: 0, haste: 1, hasteT: 0,
     kbx: 0, kby: 0, kbT: -9, camp: null, vPhase: Math.random(),
+    atkPhase: null, atkTimer: 0, atkTarget: null, wuT: -9, wuLen: 0,   // windup/cooldown state machine
+    uncancellable: false, asRamp: 1, amove: null, idleTime: 0, _movedT: -9, chan: null, jump: null, kb: null, _lift: 0,
   };
 }
 function mkHero(team, hkey, x, y) {
@@ -381,8 +412,14 @@ function dealDamage(t, amt, src) {
   if (t.sh > 0) { const a = Math.min(t.sh, amt); t.sh -= a; amt -= a; }
   t.hp -= amt; t.hitT = time;
   if (t.kind === 'hero' && src && src.kind) { t.lastHitBy = src; t.lastHitAt = time; }
-  t._flinch = time;                                        // on-hit flinch (motion spec §4)
-  if (t.kind === 'hero' && amt > t.maxHp * 0.06) hitstop = Math.max(hitstop, 0.05);   // brief hitstop on a big hit
+  /* ON-HIT FLINCH + HITSTOP (motion spec §3.2) — the highest-ROI juice in 2D combat.
+   * The flinch is ADDITIVE over whatever animation is playing, never an interrupt, so
+   * the victim never loses control. Hitstop freezes BOTH units for a few frames; its
+   * length is the attacker's archetype (Corwen's chop lands heavier than a bolt). */
+  t._flinch = time;
+  t._flinchDir = src ? Math.atan2(t.y - src.y, t.x - src.x) : t.face;
+  t._squashT = time;
+  if (t.kind === 'hero' && amt > t.maxHp * 0.06) hitstop = Math.max(hitstop, motionOf(src).hitstop);
   const okNum = !t._dmgAt || time - t._dmgAt > 0.18; if (okNum) t._dmgAt = time;
   if (amt >= 1 && okNum) {
     t._dmgSlot = ((t._dmgSlot || 0) + 1) % 3;
@@ -399,6 +436,11 @@ function dealDamage(t, amt, src) {
   if (t.hp <= 0) kill(t, src);
 }
 function kill(t, src) {
+  if (src && src.kind === 'hero' && src.hkey === 'bastille' && t.kind === 'hero' && !src.dead) {   // TAKEDOWN SURGE (Jinx P)
+    src.haste = Math.max(src.haste || 1, 1.3); src.hasteT = Math.max(src.hasteT || 0, time + 4); src._thrustT = time + 4;
+    fxPush({ kind: 'shock', x: src.x, y: src.y, life: .5, max: .5, r: 70, c: '255,190,120' });
+    if (src === player) feed('TAKEDOWN SURGE — overdrive for 4s!');
+  }
   if (t.maxHp && t.range !== undefined && t.kind) {          // a unit
     if (t.dead) return;
     t.dead = true;
@@ -441,9 +483,50 @@ function kill(t, src) {
   }
 }
 
+/* ============ attack windup / cooldown (motion spec §2.1-2.3) ============
+ * The whole "MOBA feel" lives here. An auto-attack is not an instant event:
+ * it is a ROOTED, cancelable WINDUP (you commit, and the shot only exists at
+ * the end of it) followed by a COOLDOWN half you are completely FREE to move
+ * through. That free half IS the stutter-step kiting seam — nothing about
+ * kiting is scripted, it falls out of these two states plus a move order.
+ * Cancelling a windup costs you the shot; that risk is what makes it skill. */
+function atkCycle(u) {                                   // seconds for one full attack cycle
+  const hasted = u.hasteT > time ? u.haste : 1;
+  return (u.cd / hasted) / (u.asRamp || 1);
+}
+function windupPct(u) { return u.kind === 'hero' ? motionOf(u).windup : 0.22; }
+function startWindup(u, t) {
+  u.atkPhase = 'WINDUP'; u.atkTimer = 0; u.uncancellable = false;
+  u.atkTarget = t; u.wuT = time; u.wuLen = atkCycle(u) * windupPct(u);
+  u.face = Math.atan2(t.y - u.y, t.x - u.x);             // LOGICAL facing snaps; the sprite catches up
+  u.idleTime = 0;
+}
+function cancelWindup(u) {                               // a move/stop order mid-windup: no shot fired
+  if (u && u.atkPhase === 'WINDUP' && !u.uncancellable) { u.atkPhase = null; u.atkTimer = 0; u.wuT = -9; }
+}
+function tickAttack(u, dt) {
+  if (!u.atkPhase) return;
+  u.atkTimer += dt;
+  if (u.atkPhase === 'WINDUP') {
+    const t = u.atkTarget;
+    if (!t || t.dead || (t.hp !== undefined && t.hp <= 0)) { u.atkPhase = null; u.atkTimer = 0; return; }
+    if (u.atkTimer >= u.wuLen - dt) u.uncancellable = true;      // final tick is committed
+    if (u.atkTimer >= u.wuLen) {
+      if (dist(u, t) <= u.range + (t.plate ? t.r : 0) + 14) {
+        if (t.plate) { u.atkT = time; u.cdT = time + Math.max(.08, atkCycle(u) - u.wuLen); towerHit(u, t); }
+        else fireAt(u, t);
+        u.atkPhase = 'COOLDOWN'; u.atkTimer = 0;
+      } else { u.atkPhase = null; u.atkTimer = 0; }               // target walked out: whiff, no shot
+    }
+  } else if (u.atkPhase === 'COOLDOWN') {
+    if (u.atkTimer >= atkCycle(u) * (1 - windupPct(u))) { u.atkPhase = null; u.atkTimer = 0; }
+  }
+}
 function fireAt(u, t) {
   u.face = Math.atan2(t.y - u.y, t.x - u.x);
-  u.atkT = time; u.cdT = time + u.cd / (u.hasteT > time ? u.haste : 1);
+  const M = motionOf(u);
+  if (M.asRamp > 0) { u.asRamp = Math.min(1.45, (u.asRamp || 1) + M.asRamp); u._lastFire = time; }  // marksman spin-up
+  u.atkT = time; u.cdT = time + Math.max(.08, atkCycle(u) - (u.wuLen || 0));
   fireFx(u, t);
   if (NET.on && !NET.guest && NET.evq.length < 120) NET.evq.push(['atk', u.id, t.id]);
   let _dm = effDmg(u);
@@ -480,7 +563,11 @@ function towerFire(tw, t, mul) {
 }
 
 /* ============================ fx ============================ */
-function fxPush(e) { fx.push(e); if (fx.length > 200) fx.shift(); }
+const FX_TRIVIAL = { spk: 1, smoke: 1, casing: 1, dust: 1, debris: 1, ping: 1 };
+function fxPush(e) {
+  fx.push(e);
+  if (fx.length > 460) { const i = fx.findIndex(f => FX_TRIVIAL[f.kind]); fx.splice(i >= 0 ? i : 0, 1); }
+}
 function sparks(x, y, ang, rgb, mag) {
   const n = Math.round(6 * mag);
   for (let i = 0; i < n; i++) {
@@ -551,6 +638,12 @@ function castAbility(u, i, tx, ty, force) {
     return true;
   }
   if (NET.on && !NET.guest && NET.evq.length < 120) NET.evq.push(['cast', u.id, i, tx, ty]);
+  /* ANIMATION CANCEL / ATTACK RESET (motion spec §2.2). Casting mid-windup throws away
+   * the shot; casting during the recovery half SKIPS the backswing entirely so the next
+   * auto starts immediately. That asymmetry — punished early, rewarded late — is the
+   * whole reason weaving abilities between autos is a skill and not just button mashing. */
+  cancelWindup(u);
+  if (u.atkPhase === 'COOLDOWN') { u.atkPhase = null; u.atkTimer = 0; u.cdT = Math.min(u.cdT, time); }
   u.castT = time; u.face = Math.atan2(ty - u.y, tx - u.x) || u.face;
   const l = u.level, fac = u.hero.fac;
   const lrgb = { dawnmarch: '255,233,168', vectra: '159,232,255', mawborn: '255,150,90' }[fac];
@@ -704,6 +797,90 @@ function castAbility(u, i, tx, ty, force) {
       } });
       break;
     }
+    /* ======================= BASTILLE v2 — Diablo-grade kit ======================= */
+    case 'gatling': {
+      u.face = ang;
+      u.chan = { kind: 'gat', t0: time, until: time + ab.dur, fireT: time + 0.22, ang, ab, lvl: l, n: 0 };
+      u.order = null; u.target = null; u.amove = null; cancelWindup(u);
+      fxPush({ kind: 'spinup', x: u.x, y: u.y, life: .26, max: .26, r: 30, c: lrgb, follow: u, rot: ang });
+      fxPush({ kind: 'cone', x: u.x, y: u.y, life: ab.dur, max: ab.dur, r: ab.range, ang, half: ab.spread + 0.05, c: lrgb, follow: u });
+      fxPush({ kind: 'dust', x: u.x, y: u.y, life: .5, max: .5, r: 36 });
+      if (u === player) feed('GATLING SALVO — barrels hot.');
+      break;
+    }
+    case 'rockets': {
+      capTo(ab.range);
+      const X = tx, Y = ty;
+      u.face = ang;
+      fxPush({ kind: 'dust', x: u.x, y: u.y, life: .45, max: .45, r: 30 });
+      fxPush({ kind: 'mflash', x: u.x + Math.cos(ang) * 20, y: u.y - 16, rot: ang - 0.7, life: .22, max: .22, c: '255,170,90', r: 22 });
+      fxPush({ kind: 'shock', x: u.x, y: u.y - 10, life: .3, max: .3, r: 36, c: '255,190,120' });
+      telegraphs.push({ x: X, y: Y, r: ab.radius, at: time + 1.3, team: u.team, c: '255,170,90', born: time, soft: true, cb: () => {} });
+      for (let k = 0; k < ab.count; k++) {
+        const last = k === ab.count - 1;
+        const rr = last ? 0 : Math.sqrt(Math.random()) * ab.radius * 0.85, ra = Math.random() * TAU;
+        const ix = X + Math.cos(ra) * rr, iy = Y + Math.sin(ra) * rr;
+        const dur = 0.8 + k * 0.07;
+        const side = k % 2 ? 1 : -1;
+        const sx0 = u.x + Math.cos(ang) * 12 + Math.cos(ang + Math.PI / 2) * side * 13, sy0 = u.y - 20;
+        const bend = side * (70 + Math.random() * 130);
+        const apex = { x: (sx0 + ix) / 2 + Math.cos(ang + Math.PI / 2) * bend, y: Math.min(sy0, iy) - 150 - Math.random() * 90 };
+        const blastR = last ? 120 : 74, dmgK = last ? 2 : 1;
+        fxPush({ kind: 'missile', x: sx0, y: sy0, x0: sx0, y0: sy0, ax: apex.x, ay: apex.y, x2: ix, y2: iy, life: dur + k * 0.06, max: dur + k * 0.06, delay: k * 0.06, c: '255,170,90', smokeT: 0,
+          onLand: () => {
+            aoeDamage(ix, iy, blastR, ab.dmg(l) * dmgK, u);
+            for (const tw of towers) if (tw.hp > 0 && tw.team !== u.team && dist({ x: ix, y: iy }, tw) < blastR + 20) dealDamage(tw, Math.round(ab.dmg(l) * 0.5 * dmgK), u);
+            rocketBlast(ix, iy, blastR, last);
+          } });
+      }
+      if (u === player) feed('ROCKET SWARM away.');
+      break;
+    }
+    case 'vault': {
+      capTo(ab.range);
+      const X = tx, Y = ty;
+      u.jump = { x0: u.x, y0: u.y, x1: X, y1: Y, t0: time, dur: 0.42, h: 95, ab, lvl: l };
+      u.order = null; u.target = null; u.amove = null; u.face = ang; cancelWindup(u); u.chan = null;
+      u.haste = ab.haste; u.hasteT = time + ab.dur; u._thrustT = time + ab.dur;
+      fxPush({ kind: 'dust', x: u.x, y: u.y, life: .55, max: .55, r: 46 });
+      fxPush({ kind: 'shock', x: u.x, y: u.y, life: .3, max: .3, r: 54, c: lrgb });
+      fxPush({ kind: 'scorch', x: u.x, y: u.y, life: 2.2, max: 2.2, r: 30, c: lrgb });
+      fxPush({ kind: 'flash', x: u.x, y: u.y + 8, life: .14, max: .14, r: 30 });
+      for (let g2 = 1; g2 <= 4; g2++) fxPush({ kind: 'ghost', key: u.key, x: lerp(u.x, X, g2 / 5), y: lerp(u.y, Y, g2 / 5) - Math.sin(g2 / 5 * Math.PI) * 95, face: ang, life: .3 + g2 * .05, max: .3 + g2 * .05, size: 150 });
+      addShake(u.x, u.y, 3);
+      if (u === player) feed('THRUSTER VAULT — overdrive engaged.');
+      break;
+    }
+    case 'orbital': {
+      capTo(ab.range);
+      const X = tx, Y = ty;
+      u.face = ang;
+      u.chan = { kind: 'anchor', t0: time, until: time + ab.anchor };
+      u.order = null; u.target = null; u.amove = null; cancelWindup(u);
+      feed(u === player ? 'ORBITAL BARRAGE — designating target…' : '⚠ ORBITAL BARRAGE INBOUND — CLEAR THE ZONE!');
+      fxPush({ kind: 'dust', x: u.x, y: u.y, life: .6, max: .6, r: 52 });
+      fxPush({ kind: 'shock', x: u.x, y: u.y, life: .4, max: .4, r: 40, c: lrgb });
+      const hostile = !(player && u.team === player.team);
+      const rc = hostile ? '255,80,60' : lrgb;
+      fxPush({ kind: 'designator', x: u.x, y: u.y, x2: X, y2: Y, life: ab.anchor + 0.3, max: ab.anchor + 0.3, follow: u, c: rc });
+      const total = ab.anchor + 0.35 + ab.shells * 0.17 + 0.7;
+      fxPush({ kind: 'reticle', x: X, y: Y, life: total, max: total, r: ab.radius, c: rc, lock: ab.anchor, t0: time });
+      for (let s2 = 0; s2 < ab.shells; s2++) {
+        const last = s2 === ab.shells - 1;
+        const rr = last ? 0 : Math.sqrt(Math.random()) * ab.radius * 0.9, ra = Math.random() * TAU;
+        const bx = X + Math.cos(ra) * rr, by = Y + Math.sin(ra) * rr;
+        const at = time + ab.anchor + 0.35 + s2 * 0.17 + (last ? 0.45 : 0);
+        const br = last ? 150 : 85;
+        telegraphs.push({ x: bx, y: by, r: br, at, team: u.team, c: rc, born: at - 0.55, shell: true, big: last, cb: () => {
+          aoeDamage(bx, by, br, Math.round(ab.dmg(l) * (last ? 2.2 : 1)), u);
+          for (const tw of towers) if (tw.hp > 0 && tw.team !== u.team && dist({ x: bx, y: by }, tw) < br + 10) dealDamage(tw, Math.round(ab.dmg(l) * .6), u);
+          shellImpact(bx, by, br, last, u);
+        } });
+        fxPush({ kind: 'shellfall', x: bx, y: by, life: at - time, max: at - time, fallT: 0.42, c: '255,210,150' });
+      }
+      ultCeremony(u, total, '255,140,60');
+      break;
+    }
     case 'barrage': {
       capTo(ab.range);
       const X = tx, Y = ty;
@@ -727,8 +904,10 @@ function POTQ(u) { return 55 + 18 * u.level; }
 /* League-study passives: called whenever a hero's ABILITY deals damage */
 function onAbilityHit(src, t) {
   if (!src || src.kind !== 'hero') return;
-  if (src.hkey === 'bastille') {
+  if (src.hkey === 'bastille' && time - (src._cdrT || -9) > 0.3) {   // TARGETING UPLINK — throttled so a tracer stream isn't 14 refunds
+    src._cdrT = time;
     for (let i = 0; i < 4; i++) src.abCd[i] = Math.max(time, (src.abCd[i] || 0) - 1.0);
+    if (src === player) { const b = $('bar'); if (b) { b.classList.add('cdr'); clearTimeout(b._cdrTO); b._cdrTO = setTimeout(() => b.classList.remove('cdr'), 160); } }
   }
   if (src.hkey === 'liora' && t && t.kind) { t._brand = time + 5; }
   ravenerStack(src, t);
@@ -744,6 +923,117 @@ function ravenerStack(src, t) {
     fxPush({ kind: 'shock', x: t.x, y: t.y, life: .35, max: .35, r: 40, c: '255,120,200' });
   }
 }
+/* ---------------- BASTILLE v2 shared machinery (runs on host AND guests; damage self-guards) ---------------- */
+let ultT = 0, ultC = '255,140,60';
+function ultCeremony(u, dur, c) { if (player && Math.hypot(u.x - player.x, u.y - player.y) < 1100) { ultT = Math.max(ultT, time + dur); ultC = c; } }
+function debris(x, y, n) {
+  for (let i = 0; i < (n || 1); i++) {
+    const a = Math.random() * TAU, sp = 90 + Math.random() * 260;
+    fxPush({ kind: 'debris', x, y, z: 2, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.5, vz: 180 + Math.random() * 280, life: .8 + Math.random() * .5, max: 1.3, rot: Math.random() * TAU, s: 3 + Math.random() * 4 });
+  }
+}
+function smokeBurst(x, y, r, n, dark) {
+  for (let i = 0; i < n; i++) fxPush({ kind: 'smoke', x: x + (Math.random() - .5) * r * .6, y: y + (Math.random() - .5) * r * .3, vx: (Math.random() - .5) * 40, vy: -40 - Math.random() * 50, life: 1 + Math.random() * .4, max: 1.4, r: r * .22, grow: r * .6, dark });
+}
+function rocketBlast(x, y, r, big) {
+  fxPush({ kind: 'flash', x, y, life: .18, max: .18, r: r * .8 });
+  fxPush({ kind: 'fireball', x, y, life: big ? .55 : .42, max: big ? .55 : .42, r: r * (big ? 1.05 : .95), seed: Math.random() * 9 });
+  fxPush({ kind: 'shock', x, y, life: .45, max: .45, r: r * 1.3, c: '255,190,120' });
+  fxPush({ kind: 'scorch', x, y, life: big ? 5 : 3, max: big ? 5 : 3, r: r * .75, c: '255,140,60' });
+  if (big) fxPush({ kind: 'crack', x, y, life: 6, max: 6, r: r * .9, seed: Math.random() * 9 });
+  sheetFx('fx_death_vectra', { x, y, size: r * 2.2 });
+  debris(x, y, big ? 14 : 7);
+  smokeBurst(x, y, r, big ? 6 : 3, true);
+  addShake(x, y, big ? 11 : 5);
+}
+function shellImpact(x, y, r, big, u) {
+  fxPush({ kind: 'flash', x, y, life: .2, max: .2, r });
+  fxPush({ kind: 'column', x, y, life: big ? .8 : .45, max: big ? .8 : .45, r: r * (big ? 1.1 : 0.8), c: '255,180,100', core: big ? 1 : 0.45 });
+  fxPush({ kind: 'fireball', x, y, life: big ? .6 : .4, max: big ? .6 : .4, r, seed: Math.random() * 9 });
+  fxPush({ kind: 'shock', x, y, life: .5, max: .5, r: r * 1.4, c: '255,190,120' });
+  fxPush({ kind: 'scorch', x, y, life: big ? 7 : 4, max: big ? 7 : 4, r: r * .8, c: '255,140,60' });
+  if (big) fxPush({ kind: 'crack', x, y, life: 8, max: 8, r: r * .9, seed: Math.random() * 9 });
+  sheetFx('fx_death_vectra', { x, y, size: r * 2.4 });
+  debris(x, y, big ? 18 : 8);
+  smokeBurst(x, y, r, big ? 6 : 3, true);
+  if (big) {
+    fxPush({ kind: 'fire', x, y, life: 3.6, max: 3.6, r: r * 1.05, src: u, tickT: 0, seed: Math.random() * 9 });
+    for (const t of units) if (foesOf(u)(t) && Math.hypot(t.x - x, t.y - y) < r + t.r) {
+      const a = Math.atan2(t.y - y, t.x - x) || Math.random() * TAU;
+      t.kb = { vx: Math.cos(a) * 520, vy: Math.sin(a) * 520, until: time + 0.22 };
+    }
+    hitstop = Math.max(hitstop, 0.07);
+  }
+  addShake(x, y, big ? 16 : 8);
+}
+/* per-frame shared tick: gatling channel emission, vault flight, thruster exhaust, mech footfall dust */
+function tickBastille(dt) {
+  for (const u of heroes) {
+    if (u.dead) { u.chan = null; u.jump = null; continue; }
+    const c = u.chan;
+    if (c) {
+      if (time >= c.until) u.chan = null;
+      else if (c.kind === 'gat') {
+        u.face = c.ang;
+        while (time >= c.fireT && c.fireT < c.until) {
+          c.fireT += c.ab.rate; c.n++;
+          const side = c.n % 2 ? 1 : -1;
+          const a = c.ang + (Math.random() - .5) * 2 * c.ab.spread;
+          const px = Math.cos(c.ang + Math.PI / 2) * side * 9, py = Math.sin(c.ang + Math.PI / 2) * side * 9;
+          const mx = u.x + Math.cos(c.ang) * 28 + px, my = u.y + Math.sin(c.ang) * 28 + py - 14;
+          projectiles.push({ x: mx, y: my, ang: a, sp: 1500, left: c.ab.range, dmg: c.ab.dmg(c.lvl), team: u.team, src: u, c: '255,205,130', tracer: true });
+          fxPush({ kind: 'mflash', x: mx, y: my, rot: a, life: .08, max: .08, c: '255,190,110', r: 19 });
+          fxPush({ kind: 'casing', x: u.x - Math.cos(c.ang) * 2 + px, y: u.y - 12, vx: -Math.cos(c.ang) * 50 + (Math.random() - .5) * 60 + Math.cos(c.ang + Math.PI / 2) * side * 110, vy: -170 - Math.random() * 90, life: .7, max: .7, rot: Math.random() * TAU, rv: (Math.random() - .5) * 20 });
+          if (c.n % 4 === 0) fxPush({ kind: 'smoke', x: mx, y: my, vx: Math.cos(c.ang) * 30, vy: -22, life: .55, max: .55, r: 7, grow: 26 });
+          u._recoil = time;
+          if (c.n % 3 === 0) addShake(u.x, u.y, 1.8);
+        }
+      } else if (c.kind === 'anchor') {
+        if (Math.random() < dt * 14) fxPush({ kind: 'spk', x: u.x + (Math.random() - .5) * 30, y: u.y + 10, vx: (Math.random() - .5) * 60, vy: -90 - Math.random() * 60, life: .3, max: .3, c: '255,190,120' });
+      }
+    }
+    const j = u.jump;
+    if (j) {
+      const p = clamp((time - j.t0) / j.dur, 0, 1);
+      if (!NET.guest) { u.x = lerp(j.x0, j.x1, p); u.y = lerp(j.y0, j.y1, p); }
+      u.moving = true; u._movedT = time;
+      const lift = Math.sin(p * Math.PI) * j.h;
+      for (let k2 = 0; k2 < 2; k2++) fxPush({ kind: 'spk', x: u.x + (Math.random() - .5) * 16, y: u.y - lift + 18, vx: (Math.random() - .5) * 90 - Math.cos(u.face) * 60, vy: 120 + Math.random() * 140, life: .22, max: .22, c: k2 ? '159,232,255' : '255,170,90', w: 3 });
+      if (p >= 1) {
+        u.jump = null;
+        const ab = j.ab;
+        aoeDamage(j.x1, j.y1, ab.radius, ab.dmg(j.lvl), u);
+        for (const t of units) if (foesOf(u)(t) && Math.hypot(t.x - j.x1, t.y - j.y1) < ab.radius + t.r) {
+          const a = Math.atan2(t.y - j.y1, t.x - j.x1) || Math.random() * TAU;
+          t.kb = { vx: Math.cos(a) * 460, vy: Math.sin(a) * 460, until: time + 0.2 };
+        }
+        fxPush({ kind: 'flash', x: j.x1, y: j.y1, life: .16, max: .16, r: 60 });
+        fxPush({ kind: 'shock', x: j.x1, y: j.y1, life: .45, max: .45, r: ab.radius * 1.25, c: '159,232,255' });
+        fxPush({ kind: 'shock', x: j.x1, y: j.y1, life: .32, max: .32, r: ab.radius * 0.7, c: '255,190,120' });
+        fxPush({ kind: 'fireball', x: j.x1, y: j.y1 + 6, life: .3, max: .3, r: 46, seed: Math.random() * 9 });
+        fxPush({ kind: 'dust', x: j.x1, y: j.y1, life: .7, max: .7, r: ab.radius * 1.1 });
+        fxPush({ kind: 'crack', x: j.x1, y: j.y1, life: 4, max: 4, r: 70, seed: Math.random() * 9 });
+        fxPush({ kind: 'scorch', x: j.x1, y: j.y1, life: 2.5, max: 2.5, r: 40, c: '159,232,255' });
+        debris(j.x1, j.y1, 8);
+        sheetFx('fx_hit_cyan', { x: j.x1, y: j.y1, size: 150 });
+        addShake(j.x1, j.y1, 8);
+        hitstop = Math.max(hitstop, 0.04);
+      }
+    }
+    if (u.hkey !== 'bastille') continue;
+    // OVERDRIVE exhaust trail + mech footfall dust (the walker reads HEAVY and HOT)
+    if (u._thrustT > time && u.moving && !u.jump) {
+      u._exT = (u._exT || 0) + dt;
+      if (u._exT > 0.035) { u._exT = 0;
+        for (let k2 = 0; k2 < 2; k2++) fxPush({ kind: 'spk', x: u.x - Math.cos(u.face) * 14 + (Math.random() - .5) * 12, y: u.y + 6 + (Math.random() - .5) * 8, vx: -Math.cos(u.face) * 160 + (Math.random() - .5) * 40, vy: -Math.sin(u.face) * 160 - 20, life: .26, max: .26, c: k2 ? '159,232,255' : '255,170,90', w: 2.6 }); }
+    }
+    if (u.moving && !u.jump) {
+      const M = motionOf(u), ph = Math.sin(time * M.cadence + u.vPhase * 6.28);
+      if (u._stepPh !== undefined && (ph > 0) !== (u._stepPh > 0)) fxPush({ kind: 'dust', x: u.x + (ph > 0 ? 9 : -9), y: u.y + 14, life: .4, max: .4, r: 16 });
+      u._stepPh = ph;
+    }
+  }
+}
 function aoeDamage(x, y, r, dmg, src) {
   for (const t of units) if (foesOf(src)(t) && Math.hypot(t.x - x, t.y - y) < r + t.r) { dealDamage(t, dmg, src); onAbilityHit(src, t); }
 }
@@ -753,6 +1043,9 @@ const projectiles = [];
 function stepUnit(u, dt) {
   if (u.dead) return;
   if (u.dieAt && time > u.dieAt) { u.dead = true; boom(u); return; }
+  if (u.kb && time < u.kb.until) { u.x = clamp(u.x + u.kb.vx * dt, 20, WORLD.w - 20); u.y = clamp(u.y + u.kb.vy * dt, 20, WORLD.h - 20); }
+  if (u.jump) { u.moving = true; u._movedT = time; return; }                 // airborne: position is driven by tickBastille
+  if (u.chan && time < u.chan.until) { u.idleTime = 0; return; }             // channeling / anchored: rooted
   if (u.shT && time > u.shT) u.sh = 0;
   if (u.hasteT && time < u.hasteT === false) u.haste = 1;
   const sp = (u.speed + (u.kind === 'hero' ? itemStat(u, 'ms') : 0)) * (u.hasteT > time ? u.haste : 1) * (u.recallT ? 0 : 1);
@@ -765,7 +1058,17 @@ function stepUnit(u, dt) {
     return;
   }
   // heroes + minions + brood
+  /* The attack timer runs EVERY tick — including while walking. That is deliberate:
+   * the COOLDOWN half keeps burning down as you reposition, which is the entire
+   * stutter-step seam. Only the WINDUP roots you. */
+  tickAttack(u, dt);
+  if (u.atkPhase === 'WINDUP') return;                     // rooted, committed, cancelable by an order
+  if (u.asRamp > 1 && time - (u._lastFire || -9) > 1.4) u.asRamp = Math.max(1, u.asRamp - dt * 0.55);  // spin-down
   let t = u.target && !u.target.dead && (u.target.hp === undefined || u.target.hp > 0) ? u.target : null;
+  if (u.kind === 'hero' && u.amove && !t) {                // attack-move: acquire the instant one enters range
+    const acq = nearestEnemy(u, u.range * 1.35 + 70);
+    if (acq) { t = acq; u.target = acq; u.order = null; }
+  }
   if (u.kind !== 'hero') {
     /* League acquisition order: (1) enemy hero attacking a nearby ally hero
      * (call-for-help), (2) nearest enemy minion, (3) nearest enemy hero.
@@ -786,18 +1089,21 @@ function stepUnit(u, dt) {
     const tw = nearestTower(u, 260);
     if (!t && tw) { // hit towers
       if (dist(u, tw) > u.range + tw.r) moveToward(u, tw.x, tw.y, sp, dt);
-      else if (time >= u.cdT) { u.atkT = time; u.cdT = time + u.cd; towerHit(u, tw); }
+      else if (!u.atkPhase && time >= u.cdT) startWindup(u, tw);
       return;
     }
   }
   if (t && t.hp !== undefined && t.plate) {                  // tower target
     if (dist(u, t) > u.range + t.r) moveToward(u, t.x, t.y, sp, dt);
-    else if (time >= u.cdT) { u.atkT = time; u.cdT = time + u.cd; towerHit(u, t); }
+    else if (!u.atkPhase && time >= u.cdT) startWindup(u, t);
     return;
   }
   if (t) {
-    if (dist(u, t) > u.range) moveToward(u, t.x, t.y, sp, dt);
-    else if (time >= u.cdT) fireAt(u, t);
+    /* 4% range slop on the auto-chase (motion spec §2.3): a bot that snaps to
+     * perfect range would be strictly better than a human stutter-stepping.
+     * Leaving the chase slightly imprecise is what makes manual play win. */
+    if (dist(u, t) > u.range * (u === player ? 1.0 : 1.04)) moveToward(u, t.x, t.y, sp, dt);
+    else if (!u.atkPhase && time >= u.cdT) startWindup(u, t);
     return;
   }
   if (u.order) {
@@ -814,6 +1120,13 @@ function stepUnit(u, dt) {
     if (e) u.target = e;
     else if (u.path) u.order = { ...u.path[u.wp] };   // resume the lane after a fight
   }
+  /* IDLE FIDGET (spec §3.1) — cheap "alive". After 8s of genuine standing still a
+   * champion plays a one-shot flourish, then re-rolls a 6-12s window. ANY order
+   * cancels it instantly, so it never fires while the player is doing something. */
+  if (u.kind === 'hero' && !u.atkPhase && time - (u._movedT || -9) > 0.45) {
+    u.idleTime += dt;
+    if (u.idleTime > 8 && Math.random() < dt / 2) { u._fidget = time; u.idleTime = -(6 + Math.random() * 6); }
+  } else u.idleTime = 0;
 }
 function towerHit(u, tw) {
   if (u.role === 'siege') { dealDamage(tw, effDmg(u), u); }   // siege: double damage to towers
@@ -828,7 +1141,7 @@ function moveToward(u, x, y, sp, dt) {
   const d = Math.hypot(x - u.x, y - u.y);
   if (d < 6) return true;
   u.face = Math.atan2(y - u.y, x - u.x);
-  u.moving = true;
+  u.moving = true; u._movedT = time; u.idleTime = 0; u._fidget = -9;
   u.x += (x - u.x) / d * sp * dt;
   u.y += (y - u.y) / d * sp * dt;
   u.x = clamp(u.x, 20, WORLD.w - 20); u.y = clamp(u.y, 20, WORLD.h - 20);
@@ -916,6 +1229,7 @@ function heroesThink(dt) {
   // AI brain for every non-player hero
   for (const e of heroes) {
     if ((e === player && !DEMOF) || e.dead) continue;   // demo drives the player too
+    if (e === player && window.DV_QA && DV_QA.noAI) continue;   // QA hook: captures drive the player themselves
     if (e.human && e !== player) continue;               // a guest commands this hero
     if (time < (e.aiT || 0)) continue;
     e.aiT = time + 0.5;
@@ -932,7 +1246,10 @@ function heroesThink(dt) {
     if (foeHero && e.level >= 6 && time >= e.abCd[3]) castAbility(e, 3, foeHero.x, foeHero.y);
     else if (foeHero && time >= e.abCd[0]) castAbility(e, 0, foeHero.x, foeHero.y);
     else if (m && time >= e.abCd[1] && e.level >= 2) castAbility(e, 1, m.x, m.y);
-    else if (e.hp < e.maxHp * .6 && time >= e.abCd[2] && e.level >= 3) castAbility(e, 2, e.x, e.y);
+    else if (e.hp < e.maxHp * .6 && time >= e.abCd[2] && e.level >= 3) {
+      if (e.hkey === 'bastille' && foeHero) { const a2 = Math.atan2(e.y - foeHero.y, e.x - foeHero.x); castAbility(e, 2, e.x + Math.cos(a2) * 280, e.y + Math.sin(a2) * 280); }
+      else castAbility(e, 2, e.x, e.y);
+    }
     if (foeHero && foeHero.hp < foeHero.maxHp * .5) { e.target = foeHero; continue; }
     if (m) { e.target = m; continue; }
     e.target = null;
@@ -992,6 +1309,7 @@ cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.addEventListener('pointerdown', e => {
   if (!started || over || !player || player.dead) return;
   const w = worldXY(e);
+  if (e.shiftKey && e.button === 2) { attackMovePlayer(w.x, w.y); return; }   // shift+right = attack-move
   const isMove = e.button === 2 || e.pointerType === 'touch';
   if (isMove || e.button === 2) {
     orderPlayer(w.x, w.y);
@@ -1021,8 +1339,28 @@ function orderFor(player, x, y) {
   player.recallT = 0;
   if (best) { player.target = best; player.order = null; }
   else if (bt) { player.target = bt; player.order = null; }
-  else { player.target = null; player.order = { x, y }; }
+  else {
+    // A pure MOVE order cancels an in-flight windup — you lose the shot. That
+    // trade (reposition vs. land the hit) is the skill in the stutter-step.
+    player.target = null; player.order = { x, y }; player.amove = null; cancelWindup(player);
+  }
+  if (player.chan && player.chan.kind === 'gat') player.chan = null;        // moving ends the salvo (Diablo channel rule)
   fxPush({ kind: 'ping', x, y, life: .5, max: .5, c: best || bt ? '255,90,90' : '140,255,140' });
+}
+/* ATTACK-MOVE (spec §2.4) — the input backbone. Walk toward the point but stop and
+ * attack the instant anything enters acquisition range. A misclick walks you; it
+ * never right-clicks you out of position. Bound to A and to shift+right-click. */
+function attackMoveFor(u, x, y) {
+  if (!u || u.dead) return;
+  u.recallT = 0; u.amove = { x, y };
+  const acq = nearestEnemy(u, u.range * 1.35 + 70);
+  if (acq) { u.target = acq; u.order = null; }
+  else { u.target = null; u.order = { x, y }; cancelWindup(u); }
+  fxPush({ kind: 'ping', x, y, life: .5, max: .5, c: '255,190,90' });
+}
+function attackMovePlayer(x, y) {
+  if (NET.guest) netSend({ t: 'amove', x: Math.round(x), y: Math.round(y) });
+  attackMoveFor(player, x, y);
 }
 addEventListener('keydown', e => {
   if (!started || over || !player) return;
@@ -1035,7 +1373,13 @@ addEventListener('keydown', e => {
     if (NET.guest) { netSend({ t: 'recall' }); feed('Recalling…'); }
     else { player.recallT = time + 4; feed('Recalling…'); }
   }
-  else if (k === 's') { if (NET.guest) netSend({ t: 'stop' }); player.order = null; player.target = null; }
+  else if (k === 'a') attackMovePlayer(mouse.x, mouse.y);      // attack-move at the cursor
+  else if (k === 'h') { if (NET.guest) netSend({ t: 'hold' }); player.order = null; player.amove = null; }  // hold position, still autos in range
+  else if (k === 's') {
+    if (NET.guest) netSend({ t: 'stop' });
+    player.order = null; player.target = null; player.amove = null; cancelWindup(player);
+    if (player.chan && player.chan.kind === 'gat') player.chan = null;
+  }
   else if (k === 'p' && !NET.guest) { const sh = $('shop'); if (sh && atShop(player)) { sh.classList.toggle('hidden'); if (!sh.classList.contains('hidden')) paintShop(); } }
 });
 
@@ -1384,34 +1728,77 @@ function drawBrush() {
 
 /* ============================ render ============================ */
 function drawSheet(u, sheet, size, hFlip, alpha) {
-  const n = sheet.n;
-  const fi = (u._atkAnim && time - u.atkT >= 0) ? Math.floor((time - u.atkT) * sheet.fps) % n : Math.floor((time * sheet.fps + u.vPhase * n)) % n;
+  const n = sheet.n, M = motionOf(u);
+  const ph = u.vPhase * 6.28;
+  /* FRAME SELECT — during an attack the strip is driven by the attack TIMER, not by
+   * wall-clock fps: the first 60% of the strip plays out across the windup and the
+   * last 40% across the release. So a fast champion's attack visibly compresses and
+   * a slow one's visibly commits, from the same 16 frames of art. */
+  let fi;
+  if (u._atkAnim) {
+    let p;
+    if (u.atkPhase === 'WINDUP' && u.wuLen > 0) p = clamp(u.atkTimer / u.wuLen, 0, 1) * 0.6;
+    else p = 0.6 + clamp((time - u.atkT) / 0.34, 0, 1) * 0.4;
+    fi = Math.min(n - 1, Math.max(0, Math.floor(p * n)));
+  } else {
+    const rate = (u.hasteT > time ? u.haste : 1) * (u.asRamp || 1);   // gait couples to real speed
+    fi = Math.floor(time * sheet.fps * rate + u.vPhase * n) % n;
+  }
   cx.save();
   cx.globalAlpha = alpha === undefined ? 1 : alpha;
   cx.translate(Math.round(u.x - camX) * ZOOM, Math.round(u.y - camY) * ZOOM);
   cx.scale(ZOOM, ZOOM);
+  // WINDUP cast-raise: the weapon draws up and coils BACK away from the target, so the
+  // release reads as stored energy being spent rather than a sprite popping forward.
+  if (u.atkPhase === 'WINDUP' && u.wuLen > 0) {
+    const e = Math.pow(clamp(u.atkTimer / u.wuLen, 0, 1), 1.6);
+    const back = u.range <= 80 ? 7 : 4;
+    cx.translate(-Math.cos(u.face) * back * e * ZOOM, (-6 * e) * ZOOM);
+    cx.scale(1 - 0.035 * e, 1 + 0.055 * e);
+  }
   const atkAge = time - u.atkT;
   if (atkAge >= 0 && atkAge < 0.18) { const st = Math.sin(atkAge / 0.18 * Math.PI) * (u.range <= 80 ? 11 : 4); cx.translate(Math.cos(u.face) * st * ZOOM, Math.sin(u.face) * st * ZOOM); }
-  // procedural life: the sheets alone read frozen in stills (Tee 2026-08-19)
-  const ph = u.vPhase * 6.28;
-  if (u.moving) {
-    cx.translate(0, -Math.abs(Math.sin(time * 9 + ph)) * 3.2 * ZOOM);          // stride bob
-    cx.rotate(Math.sin(time * 9 + ph) * 0.055);                                 // gait sway
+  // BASTILLE v2 body language: gatling recoil, vault lift, anchor squat, channel vibration
+  const rcAge = time - (u._recoil || -9);
+  if (rcAge >= 0 && rcAge < 0.08) { const k = 1 - rcAge / 0.08; cx.translate(-Math.cos(u.face) * 3.5 * k * ZOOM, (Math.random() - .5) * 1.5 * k * ZOOM); }
+  if (u._lift) cx.translate(0, -u._lift * ZOOM);
+  if (u.chan && u.chan.kind === 'anchor') { const k = clamp((time - u.chan.t0) / 0.2, 0, 1); cx.translate((Math.random() - .5) * 1.2 * ZOOM, 4 * k * ZOOM); cx.scale(1 + 0.06 * k, 1 - 0.08 * k); }
+  if (u.chan && u.chan.kind === 'gat') { cx.translate(Math.cos(u.face) * 3 * ZOOM, 0); cx.rotate(Math.cos(u.face) < 0 ? -0.04 : 0.04); }
+  /* LOCOMOTION — the archetype layer. Foot-cadence units plant; a hover unit
+   * (cadence 0) has NO footfall at all and keeps bobbing even at a dead stop,
+   * which is what makes it read as alive while it is standing still. */
+  if (M.cadence === 0) {
+    cx.translate(0, Math.sin(time * 1.5 + ph) * M.bob * ZOOM);
+    cx.rotate(Math.sin(time * 0.9 + ph) * 0.03);
+  } else if (u.moving) {
+    cx.translate(0, -Math.abs(Math.sin(time * M.cadence + ph)) * M.bob * ZOOM);
+    cx.rotate(Math.sin(time * M.cadence + ph) * M.lean);
   } else {
-    cx.translate(0, Math.sin(time * 2.3 + ph) * 1.1 * ZOOM);                    // breathing
+    cx.translate(0, Math.sin(time * 2.3 + ph) * (M.bob * 0.34) * ZOOM);
     cx.rotate(Math.sin(time * 1.4 + ph) * 0.018);
+  }
+  const fidAge = time - (u._fidget || -9);                 // idle one-shot flourish
+  if (fidAge >= 0 && fidAge < 0.75) {
+    const fs = Math.sin(fidAge / 0.75 * Math.PI);
+    cx.rotate(Math.sin(fidAge * 14) * 0.05 * fs);
+    cx.translate(0, -3 * fs * ZOOM);
   }
   const castAge = time - (u.castT || -9);
   if (castAge >= 0 && castAge < 0.32) { const cs = Math.sin(castAge / 0.32 * Math.PI); cx.translate(0, -5 * cs * ZOOM); cx.scale(1 + 0.07 * cs, 1 + 0.07 * cs); }
   if (u.vFace === undefined) u.vFace = u.face;
   let dfc = u.face - u.vFace; while (dfc > Math.PI) dfc -= TAU; while (dfc < -Math.PI) dfc += TAU;
-  u.vFace += dfc * 0.22;
+  u.vFace += dfc * M.turn;                                  // turn WEIGHT: low = bruiser, high = assassin
+  cx.transform(1, 0, clamp(dfc, -1.2, 1.2) * 0.09, 1, 0, 0);  // shoulders lead the turn, body lags
   const lean = clamp(Math.sin(u.vFace) * 0.18, -0.22, 0.22);
   cx.rotate(u.moving ? lean : Math.cos(u.vFace) * -0.10);
   if (hFlip) cx.scale(-1, 1);
   const hitAge = time - u.hitT;
   const flAge = time - (u._flinch || -9);
-  if (flAge >= 0 && flAge < 0.12) cx.translate(-Math.cos(u.face) * 3 * (1 - flAge / 0.12) * ZOOM, -Math.sin(u.face) * 3 * (1 - flAge / 0.12) * ZOOM);
+  if (flAge >= 0 && flAge < 0.14) {                         // knocked back along the HIT vector, then returns
+    const k = (1 - flAge / 0.14), fd = u._flinchDir === undefined ? u.face + Math.PI : u._flinchDir;
+    cx.translate(Math.cos(fd) * 4 * k * ZOOM, Math.sin(fd) * 4 * k * ZOOM);
+    cx.scale(1 + 0.10 * k, 1 - 0.10 * k);                   // squash — takes the weight of the hit
+  }
   const pop = hitAge < 0.22 ? 1 + 0.08 * (1 - hitAge / 0.22) : 1;
   cx.scale(pop, pop);
   cx.drawImage(sheet.img, fi * sheet.fw, 0, sheet.fw, sheet.fh, -size / 2, -size / 2, size, size);
@@ -1422,28 +1809,77 @@ function drawSheet(u, sheet, size, hFlip, alpha) {
   }
   cx.restore();
 }
+/* BASTILLE presence layer — point-glows only (NO sprite-cell overlays: the 08-19 square-halo lesson).
+ * Barrel heat that climbs with sustained fire, a pulsing reactor core, vent steam while idle. */
+function drawMechPresence(u, sx, sy, size) {
+  const heat = clamp(((u.asRamp || 1) - 1) / 0.45, 0, 1) * 0.7 + (u.chan && u.chan.kind === 'gat' ? 1 : 0) + (time - (u._recoil || -9) < 0.1 ? 0.5 : 0);
+  const fc = u.vFace === undefined ? u.face : u.vFace;
+  const fwd = Math.cos(fc), side = Math.sin(fc);
+  cx.save(); cx.globalCompositeOperation = 'lighter';
+  if (heat > 0.05) {
+    const h = Math.min(1.4, heat);
+    for (const k of [-1, 1]) {
+      const mx = sx + (fwd * 30 + -side * k * 9) * ZOOM, my = sy + (side * 30 * 0.35 + fwd * k * 6 - 16) * ZOOM;
+      const r = (9 + 9 * h) * ZOOM;
+      const g = cx.createRadialGradient(mx, my, 0, mx, my, r);
+      g.addColorStop(0, 'rgba(255,235,200,' + 0.55 * h + ')'); g.addColorStop(0.45, 'rgba(255,150,70,' + 0.35 * h + ')'); g.addColorStop(1, 'rgba(255,120,50,0)');
+      cx.fillStyle = g; cx.beginPath(); cx.arc(mx, my, r, 0, TAU); cx.fill();
+    }
+  }
+  // reactor / sensor pulse — cyan, small, breathing
+  const pr = (4.5 + 1.5 * Math.sin(time * 3 + u.vPhase * 6)) * ZOOM;
+  const rx = sx - fwd * 4 * ZOOM, ry = sy - 24 * ZOOM;
+  const rg = cx.createRadialGradient(rx, ry, 0, rx, ry, pr * 3);
+  rg.addColorStop(0, 'rgba(220,250,255,0.55)'); rg.addColorStop(0.35, 'rgba(159,232,255,0.28)'); rg.addColorStop(1, 'rgba(159,232,255,0)');
+  cx.fillStyle = rg; cx.beginPath(); cx.arc(rx, ry, pr * 3, 0, TAU); cx.fill();
+  // overdrive: cyan underglow pool on the ground (radial, never a square)
+  if (u._thrustT > time) {
+    const og = cx.createRadialGradient(sx, sy + size * 0.3 * ZOOM, 0, sx, sy + size * 0.3 * ZOOM, size * 0.5 * ZOOM);
+    og.addColorStop(0, 'rgba(159,232,255,0.30)'); og.addColorStop(1, 'rgba(159,232,255,0)');
+    cx.fillStyle = og; cx.beginPath(); cx.ellipse(sx, sy + size * 0.3 * ZOOM, size * 0.5 * ZOOM, size * 0.2 * ZOOM, 0, 0, TAU); cx.fill();
+  }
+  cx.restore();
+  // vent steam while standing (cheap alive)
+  if (!u.moving && !u.chan && !u.jump && Math.random() < 0.06) fxPush({ kind: 'smoke', x: sx === undefined ? u.x : u.x - fwd * 10 + (Math.random() - .5) * 10, y: u.y - 34, vx: (Math.random() - .5) * 14, vy: -22, life: .9, max: .9, r: 4, grow: 14 });
+}
 function drawUnit(u) {
   const sx = (u.x - camX) * ZOOM, sy = (u.y - camY) * ZOOM;
   if (sx < -140 || sy < -140 || sx > VW + 140 || sy > VH + 140) return;
   const anims = ANIMS[u.key]; if (!anims) return;
-  const state = (time - u.atkT < 0.4 && anims.attack) ? 'attack' : (u.moving && anims.walk ? 'walk' : 'idle');
+  // the attack strip now covers the WINDUP too — the wind-up is the attack, visually
+  const state = ((u.atkPhase === 'WINDUP' || time - u.atkT < 0.34) && anims.attack) ? 'attack'
+    : (u.moving && anims.walk ? 'walk' : 'idle');
   u._atkAnim = state === 'attack';
   const sheet = anims[state] || anims.idle; if (!sheet) return;
-  let size = u.kind === 'hero' ? (u.hkey === 'sovereign' ? 180 : 120) : u.kind === 'monster' ? (u.key === 'mawborn_pitbrute' ? 116 : 96) : 84;
+  // bastille's wide cannon inflates its sheet bbox, so it keys in smaller than the rest — compensate
+  let size = u.kind === 'hero' ? (u.hkey === 'sovereign' ? 180 : u.hkey === 'bastille' ? 150 : 120)
+    : u.kind === 'monster' ? (u.key === 'mawborn_pitbrute' ? 116 : 96) : 84;
   if (u.kind !== 'hero') size = Math.round(size * (u.vScale || 1));
   const hFlip = (Math.cos(u.face) < 0) !== (u.kind !== 'hero' && u.vMirror && !u.moving && time - u.atkT > 0.5);
+  let lift = 0;
+  if (u.jump) { const jp = clamp((time - u.jump.t0) / u.jump.dur, 0, 1); lift = Math.sin(jp * Math.PI) * u.jump.h; if (jp >= 1 && NET.guest) u.jump = null; }
+  u._lift = lift;
   // ground: pool shadow + team ellipse
   cx.save();
   cx.translate(sx, sy + size * 0.30 * ZOOM);
   cx.scale(ZOOM, ZOOM);
-  cx.fillStyle = 'rgba(0,0,0,0.52)';
-  cx.beginPath(); cx.ellipse(0, 2, size * 0.40, size * 0.15, 0, 0, TAU); cx.fill();
+  const shK = 1 - clamp(lift / 260, 0, 0.6);
+  cx.fillStyle = 'rgba(0,0,0,' + 0.52 * shK + ')';
+  cx.beginPath(); cx.ellipse(0, 2, size * 0.40 * shK, size * 0.15 * shK, 0, 0, TAU); cx.fill();
   cx.strokeStyle = 'rgba(' + TEAM[u.team].rgb + ',' + (u.kind === 'hero' ? 0.95 : 0.75) + ')';
   cx.lineWidth = u.kind === 'hero' ? 2.4 : 1.3;
   cx.beginPath(); cx.ellipse(0, 0, size * 0.36, size * 0.14, 0, 0, TAU); cx.stroke();
   if (u === player) {
-    cx.strokeStyle = 'rgba(255,233,168,0.8)'; cx.lineWidth = 1.4;
+    cx.strokeStyle = u.amove ? 'rgba(255,150,60,0.95)' : 'rgba(255,233,168,0.8)';   // orange = attack-move armed
+    cx.lineWidth = u.amove ? 2 : 1.4;
     cx.beginPath(); cx.ellipse(0, 0, size * 0.44, size * 0.18, 0, 0, TAU); cx.stroke();
+  }
+  // WINDUP tell: a shrinking ring under the attacker for the rooted half of the cycle.
+  // It is the counterplay window — allies and enemies can both read "the shot is coming".
+  if (u.atkPhase === 'WINDUP' && u.wuLen > 0 && u.kind === 'hero') {
+    const p = clamp(u.atkTimer / u.wuLen, 0, 1);           // already inside the ground-plane transform
+    cx.strokeStyle = 'rgba(' + TEAM[u.team].rgb + ',' + (0.25 + 0.6 * p) + ')'; cx.lineWidth = 2;
+    cx.beginPath(); cx.ellipse(0, 0, size * 0.50 * (1 - p * 0.32), size * 0.20 * (1 - p * 0.32), 0, 0, TAU); cx.stroke();
   }
   cx.restore();
   if (u === player && !player.dead) {
@@ -1453,8 +1889,10 @@ function drawUnit(u) {
     cx.beginPath(); cx.moveTo(0, 8); cx.lineTo(-7, -4); cx.lineTo(7, -4); cx.closePath(); cx.fill(); cx.stroke();
     cx.restore();
   }
-  u.moving = false;                                       // consumed by stepUnit next tick
   drawSheet(u, sheet, size, hFlip);
+  if (u.hkey === 'bastille') drawMechPresence(u, sx, sy - lift * ZOOM, size);
+  u.moving = false;   // consumed by the next tick. MUST be reset AFTER drawSheet — clearing it
+                      // first meant the procedural stride bob/gait sway never ran at all.
   // shield ring
   if (u.sh > 0) {
     cx.save(); cx.globalCompositeOperation = 'lighter';
@@ -1508,26 +1946,54 @@ function drawTower(tw) {
     cx.fillRect(bx, by, w * clamp(tw.hp / tw.maxHp, 0, 1), h);
   }
 }
-function drawFxAll() {
+const FX_GROUND = { scorch: 1, crack: 1, fire: 1, dust: 1, cone: 1, reticle: 1, designator: 1, casing: 1 };
+function drawFxAll(layer) {
+  const GROUND = layer === 'ground', AIR = layer !== 'ground';
   // telegraphs (under everything bright)
-  for (const t of telegraphs) {
+  if (GROUND) for (const t of telegraphs) {
     const sx = (t.x - camX) * ZOOM, sy = (t.y - camY) * ZOOM;
+    if (time < t.born) continue;
     const p = clamp((time - t.born) / Math.max(.01, t.at - t.born), 0, 1);
     cx.save();
+    if (t.shell) {                                           // incoming artillery: filled disc + bright shrinking ring
+      cx.fillStyle = 'rgba(' + t.c + ',' + (0.12 + 0.22 * p) + ')';
+      cx.beginPath(); cx.arc(sx, sy, t.r * ZOOM, 0, TAU); cx.fill();
+      cx.strokeStyle = 'rgba(' + t.c + ',0.85)'; cx.lineWidth = (t.big ? 3 : 2) * ZOOM;
+      cx.beginPath(); cx.arc(sx, sy, t.r * ZOOM, 0, TAU); cx.stroke();
+      cx.strokeStyle = 'rgba(255,255,255,' + (0.5 + 0.5 * p) + ')'; cx.lineWidth = 1.6 * ZOOM;
+      cx.beginPath(); cx.arc(sx, sy, t.r * ZOOM * (1.6 - 1.6 * p + 0.02), 0, TAU); cx.stroke();
+      cx.restore(); continue;
+    }
     cx.strokeStyle = 'rgba(' + t.c + ',0.8)'; cx.lineWidth = 2;
     cx.setLineDash([8, 6]);
     cx.beginPath(); cx.arc(sx, sy, t.r * ZOOM, 0, TAU); cx.stroke();
     cx.setLineDash([]);
-    cx.fillStyle = 'rgba(' + t.c + ',' + (0.10 + (t.nuke ? 0.12 : 0.06) * Math.sin(time * 10)) + ')';
-    cx.beginPath(); cx.arc(sx, sy, t.r * ZOOM * p, 0, TAU); cx.fill();
+    if (!t.soft) { cx.fillStyle = 'rgba(' + t.c + ',' + (0.10 + (t.nuke ? 0.12 : 0.06) * Math.sin(time * 10)) + ')';
+      cx.beginPath(); cx.arc(sx, sy, t.r * ZOOM * p, 0, TAU); cx.fill(); }
     if (t.nuke) {
       cx.fillStyle = 'rgba(255,255,255,0.85)'; cx.font = '700 ' + Math.round(15 * ZOOM) + 'px Rajdhani';
       cx.textAlign = 'center'; cx.fillText(Math.ceil(t.at - time) + '', sx, sy + 5);
     }
     cx.restore();
   }
+  // live projectiles (tracers / bolts) — drawn as streaks with a hot head, not just a spark trail
+  if (AIR) for (const p of projectiles) {
+    const sx = (p.x - camX) * ZOOM, sy = (p.y - camY) * ZOOM;
+    if (sx < -60 || sy < -60 || sx > VW + 60 || sy > VH + 60) continue;
+    const len = (p.tracer ? 54 : 22) * ZOOM, ex = sx - Math.cos(p.ang) * len, ey = sy - Math.sin(p.ang) * len;
+    cx.save(); cx.globalCompositeOperation = 'lighter'; cx.lineCap = 'round';
+    const lg = cx.createLinearGradient(sx, sy, ex, ey);
+    lg.addColorStop(0, 'rgba(255,255,255,0.95)'); lg.addColorStop(0.35, 'rgba(' + p.c + ',0.85)'); lg.addColorStop(1, 'rgba(' + p.c + ',0)');
+    cx.strokeStyle = lg; cx.lineWidth = (p.tracer ? 5 : 5) * ZOOM;
+    cx.beginPath(); cx.moveTo(sx, sy); cx.lineTo(ex, ey); cx.stroke();
+    const hr = (p.tracer ? 13 : 9) * ZOOM;
+    const hg = cx.createRadialGradient(sx, sy, 0, sx, sy, hr);
+    hg.addColorStop(0, 'rgba(255,255,255,0.95)'); hg.addColorStop(0.5, 'rgba(' + p.c + ',0.6)'); hg.addColorStop(1, 'rgba(' + p.c + ',0)');
+    cx.fillStyle = hg; cx.beginPath(); cx.arc(sx, sy, hr, 0, TAU); cx.fill();
+    cx.restore();
+  }
   // sheet fx
-  for (const e of sheetFxList) {
+  if (AIR) for (const e of sheetFxList) {
     const t = (time - e.t0) / e.dur;
     if (t >= 1) continue;
     let x = e.x, y = e.y;
@@ -1547,7 +2013,7 @@ function drawFxAll() {
     cx.restore();
   }
   // beams
-  for (const b of beams) {
+  if (AIR) for (const b of beams) {
     const t = (time - b.t0) / b.dur;
     if (t >= 1) continue;
     const a = t < .18 ? t / .18 : 1 - (t - .18) / .82;
@@ -1570,10 +2036,156 @@ function drawFxAll() {
   }
   // procedural fx
   for (const f of fx) {
+    if (GROUND !== !!FX_GROUND[f.kind]) continue;
     const a = clamp(f.life / f.max, 0, 1);
     const sx = (f.x - camX) * ZOOM, sy = (f.y - camY) * ZOOM;
     cx.save(); cx.globalCompositeOperation = 'lighter'; cx.globalAlpha = a;
-    if (f.kind === 'laser') {
+    if (f.kind === 'casing') {
+      cx.globalCompositeOperation = 'source-over'; cx.globalAlpha = Math.min(1, a * 2.2);
+      cx.translate(sx, sy); cx.rotate(f.rot);
+      cx.fillStyle = '#d9a441'; cx.fillRect(-3 * ZOOM, -1.3 * ZOOM, 6 * ZOOM, 2.6 * ZOOM);
+      cx.fillStyle = '#fff1b8'; cx.fillRect(-3 * ZOOM, -1.3 * ZOOM, 6 * ZOOM, 0.9 * ZOOM);
+    } else if (f.kind === 'smoke') {
+      cx.globalCompositeOperation = 'source-over';
+      const age = f.max - f.life, rr = (f.r + (f.grow || 20) * (age / f.max)) * ZOOM;
+      const g = cx.createRadialGradient(sx, sy, 0, sx, sy, rr);
+      const col = f.dark ? '40,34,30' : f.lite ? '225,225,230' : '170,170,175';
+      g.addColorStop(0, 'rgba(' + col + ',' + (f.lite ? 0.55 : 0.42) * a + ')'); g.addColorStop(1, 'rgba(' + col + ',0)');
+      cx.fillStyle = g; cx.beginPath(); cx.arc(sx, sy, rr, 0, TAU); cx.fill();
+    } else if (f.kind === 'dust') {
+      cx.globalCompositeOperation = 'source-over';
+      const p = 1 - a, rr = f.r * (0.4 + 0.8 * p) * ZOOM;
+      cx.strokeStyle = 'rgba(200,180,150,' + 0.38 * a + ')'; cx.lineWidth = Math.max(2, f.r * 0.22 * (1 - p)) * ZOOM;
+      cx.beginPath(); cx.ellipse(sx, sy, rr, rr * 0.45, 0, 0, TAU); cx.stroke();
+      const g = cx.createRadialGradient(sx, sy, 0, sx, sy, rr);
+      g.addColorStop(0, 'rgba(200,180,150,' + 0.18 * a + ')'); g.addColorStop(1, 'rgba(200,180,150,0)');
+      cx.fillStyle = g; cx.beginPath(); cx.ellipse(sx, sy, rr, rr * 0.45, 0, 0, TAU); cx.fill();
+    } else if (f.kind === 'debris') {
+      cx.globalCompositeOperation = 'source-over'; cx.globalAlpha = Math.min(1, a * 2);
+      cx.fillStyle = 'rgba(0,0,0,0.35)'; cx.beginPath(); cx.ellipse(sx, sy, f.s * 0.9 * ZOOM, f.s * 0.4 * ZOOM, 0, 0, TAU); cx.fill();
+      cx.translate(sx, sy - f.z * 0.9 * ZOOM); cx.rotate(f.rot);
+      cx.fillStyle = '#2a2622'; cx.fillRect(-f.s * ZOOM / 2, -f.s * ZOOM / 2, f.s * ZOOM, f.s * ZOOM * 0.7);
+      cx.fillStyle = 'rgba(255,140,60,' + 0.8 * a + ')'; cx.fillRect(-f.s * ZOOM / 2, -f.s * ZOOM / 2, f.s * ZOOM * 0.45, f.s * ZOOM * 0.3);
+    } else if (f.kind === 'fireball') {
+      const age = f.max - f.life, p = age / f.max, rr = f.r * (0.35 + 0.65 * Math.sqrt(p)) * ZOOM;
+      for (let k2 = 0; k2 < 4; k2++) {
+        const aa = f.seed * 1.7 + k2 * 1.57 + p * 2, off = (k2 ? rr * 0.38 : 0);
+        const lx = sx + Math.cos(aa) * off, ly = sy + Math.sin(aa) * off * 0.6 - rr * 0.25 * p, lr = rr * (k2 ? 0.62 : 1);
+        const g = cx.createRadialGradient(lx, ly, 0, lx, ly, lr);
+        g.addColorStop(0, 'rgba(255,255,235,' + 0.95 * a + ')'); g.addColorStop(0.3, 'rgba(255,200,110,' + 0.8 * a + ')');
+        g.addColorStop(0.7, 'rgba(255,110,40,' + 0.45 * a + ')'); g.addColorStop(1, 'rgba(255,80,30,0)');
+        cx.fillStyle = g; cx.beginPath(); cx.arc(lx, ly, lr, 0, TAU); cx.fill();
+      }
+    } else if (f.kind === 'crack') {
+      cx.globalCompositeOperation = 'source-over'; cx.globalAlpha = Math.min(1, a * 1.6);
+      cx.strokeStyle = 'rgba(12,8,6,0.5)'; cx.lineCap = 'round';
+      const n = 6;
+      for (let k2 = 0; k2 < n; k2++) {
+        const aa = f.seed + k2 / n * TAU + Math.sin(f.seed * 3 + k2 * 7.3) * 0.25;
+        const L = f.r * (0.55 + 0.45 * Math.abs(Math.sin(f.seed * 5 + k2 * 3.1))) * ZOOM;
+        cx.lineWidth = (1.8 - k2 % 3 * 0.4) * ZOOM;
+        cx.beginPath(); cx.moveTo(sx, sy);
+        const mx2 = sx + Math.cos(aa + 0.22) * L * 0.5, my2 = sy + Math.sin(aa + 0.22) * L * 0.5 * 0.55;
+        cx.lineTo(mx2, my2); cx.lineTo(sx + Math.cos(aa) * L, sy + Math.sin(aa) * L * 0.55); cx.stroke();
+      }
+      cx.globalCompositeOperation = 'lighter';
+      const g = cx.createRadialGradient(sx, sy, 0, sx, sy, f.r * 0.5 * ZOOM);
+      g.addColorStop(0, 'rgba(255,120,50,' + 0.35 * a + ')'); g.addColorStop(1, 'rgba(255,120,50,0)');
+      cx.fillStyle = g; cx.beginPath(); cx.ellipse(sx, sy, f.r * 0.5 * ZOOM, f.r * 0.28 * ZOOM, 0, 0, TAU); cx.fill();
+    } else if (f.kind === 'fire') {
+      const g = cx.createRadialGradient(sx, sy, 0, sx, sy, f.r * ZOOM);
+      g.addColorStop(0, 'rgba(255,120,40,' + 0.28 * a + ')'); g.addColorStop(1, 'rgba(255,80,20,0)');
+      cx.fillStyle = g; cx.beginPath(); cx.ellipse(sx, sy, f.r * ZOOM, f.r * 0.55 * ZOOM, 0, 0, TAU); cx.fill();
+      for (let k2 = 0; k2 < 14; k2++) {
+        const aa = f.seed + k2 * 2.39, rd = f.r * (0.15 + 0.8 * Math.abs(Math.sin(f.seed + k2 * 1.3)));
+        const fl = 0.6 + 0.4 * Math.sin(time * (9 + k2 % 4) + k2);
+        const fx2 = sx + Math.cos(aa) * rd * ZOOM, fy2 = sy + Math.sin(aa) * rd * 0.55 * ZOOM;
+        const fr = (9 + 7 * fl) * ZOOM;
+        const fg = cx.createRadialGradient(fx2, fy2 - fr * 0.5, 0, fx2, fy2 - fr * 0.5, fr);
+        fg.addColorStop(0, 'rgba(255,240,190,' + 0.85 * a * fl + ')'); fg.addColorStop(0.45, 'rgba(255,150,60,' + 0.6 * a + ')'); fg.addColorStop(1, 'rgba(255,90,30,0)');
+        cx.fillStyle = fg; cx.beginPath(); cx.ellipse(fx2, fy2 - fr * 0.5, fr * 0.7, fr * 1.3, 0, 0, TAU); cx.fill();
+      }
+    } else if (f.kind === 'cone') {
+      const fade = Math.min(1, a * 4, (f.max - f.life) * 8);
+      cx.translate(sx, sy); cx.rotate(f.ang);
+      const g = cx.createLinearGradient(0, 0, f.r * ZOOM, 0);
+      g.addColorStop(0, 'rgba(' + f.c + ',' + 0.26 * fade + ')'); g.addColorStop(1, 'rgba(' + f.c + ',0)');
+      cx.fillStyle = g; cx.beginPath(); cx.moveTo(0, 0); cx.arc(0, 0, f.r * ZOOM, -f.half, f.half); cx.closePath(); cx.fill();
+      cx.strokeStyle = 'rgba(255,255,255,' + 0.35 * fade + ')'; cx.lineWidth = 1 * ZOOM; cx.setLineDash([3 * ZOOM, 10 * ZOOM]); cx.lineDashOffset = -time * 500;
+      cx.beginPath(); cx.moveTo(30 * ZOOM, 0); cx.lineTo(f.r * ZOOM, 0); cx.stroke();
+      cx.strokeStyle = 'rgba(' + f.c + ',' + 0.45 * fade + ')'; cx.lineWidth = 1.2 * ZOOM; cx.setLineDash([6 * ZOOM, 8 * ZOOM]); cx.lineDashOffset = -time * 300;
+      cx.beginPath(); cx.moveTo(0, 0); cx.lineTo(Math.cos(-f.half) * f.r * ZOOM, Math.sin(-f.half) * f.r * ZOOM); cx.moveTo(0, 0); cx.lineTo(Math.cos(f.half) * f.r * ZOOM, Math.sin(f.half) * f.r * ZOOM); cx.stroke();
+    } else if (f.kind === 'spinup') {
+      const p = 1 - a;
+      const mx2 = sx + Math.cos(f.rot) * 26 * ZOOM, my2 = sy + Math.sin(f.rot) * 26 * ZOOM - 14 * ZOOM;
+      cx.translate(mx2, my2); cx.rotate(time * (10 + 30 * p));
+      cx.strokeStyle = 'rgba(' + f.c + ',' + (0.5 + 0.5 * p) + ')'; cx.lineWidth = 2.2 * ZOOM;
+      for (let k2 = 0; k2 < 3; k2++) { cx.beginPath(); cx.arc(0, 0, (8 + 10 * p) * ZOOM, k2 * 2.09, k2 * 2.09 + 1.2); cx.stroke(); }
+      const g = cx.createRadialGradient(0, 0, 0, 0, 0, 18 * ZOOM * (0.4 + p));
+      g.addColorStop(0, 'rgba(255,255,255,' + 0.7 * p + ')'); g.addColorStop(1, 'rgba(' + f.c + ',0)');
+      cx.fillStyle = g; cx.beginPath(); cx.arc(0, 0, 18 * ZOOM * (0.4 + p), 0, TAU); cx.fill();
+    } else if (f.kind === 'missile') {
+      if (f.p === undefined) { cx.restore(); continue; }
+      const sc = 1.7 * (1 + 0.5 * Math.sin(f.p * Math.PI));
+      const ang = Math.atan2(f.vy || 0, f.vx || 1);
+      // ground shadow under the arc is meaningless in screen-space; the scale pulse sells the height instead
+      cx.translate(sx, sy); cx.rotate(ang);
+      const tl = 30 * sc * ZOOM;
+      const g = cx.createLinearGradient(0, 0, -tl, 0);
+      g.addColorStop(0, 'rgba(255,255,240,0.95)'); g.addColorStop(0.3, 'rgba(255,180,90,0.85)'); g.addColorStop(1, 'rgba(255,120,40,0)');
+      cx.strokeStyle = g; cx.lineWidth = 5 * sc * ZOOM; cx.lineCap = 'round';
+      cx.beginPath(); cx.moveTo(0, 0); cx.lineTo(-tl, 0); cx.stroke();
+      cx.globalCompositeOperation = 'source-over';
+      cx.fillStyle = '#c8ccd2'; cx.fillRect(-2 * sc * ZOOM, -2.2 * sc * ZOOM, 11 * sc * ZOOM, 4.4 * sc * ZOOM);
+      cx.fillStyle = '#ff7a3a'; cx.beginPath(); cx.moveTo(9 * sc * ZOOM, -2.2 * sc * ZOOM); cx.lineTo(14 * sc * ZOOM, 0); cx.lineTo(9 * sc * ZOOM, 2.2 * sc * ZOOM); cx.closePath(); cx.fill();
+      cx.globalCompositeOperation = 'lighter';
+      const hg = cx.createRadialGradient(-1 * ZOOM, 0, 0, -1 * ZOOM, 0, 10 * sc * ZOOM);
+      hg.addColorStop(0, 'rgba(255,255,255,0.9)'); hg.addColorStop(1, 'rgba(255,170,80,0)');
+      cx.fillStyle = hg; cx.beginPath(); cx.arc(-1 * ZOOM, 0, 10 * sc * ZOOM, 0, TAU); cx.fill();
+    } else if (f.kind === 'shellfall') {
+      if (f.life > f.fallT) { cx.restore(); continue; }
+      const p = 1 - f.life / f.fallT;                         // 0 = entering from the sky, 1 = impact
+      const ox = 150 * ZOOM, oy = 560 * ZOOM;
+      const hx = sx + ox * (1 - p), hy = sy - oy * (1 - p);
+      const tx2 = hx + ox * 0.28, ty2 = hy - oy * 0.28;
+      cx.globalAlpha = 1;
+      const g = cx.createLinearGradient(hx, hy, tx2, ty2);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.4, 'rgba(' + f.c + ',0.7)'); g.addColorStop(1, 'rgba(' + f.c + ',0)');
+      cx.strokeStyle = g; cx.lineWidth = 4 * ZOOM; cx.lineCap = 'round';
+      cx.beginPath(); cx.moveTo(hx, hy); cx.lineTo(tx2, ty2); cx.stroke();
+      const hg = cx.createRadialGradient(hx, hy, 0, hx, hy, 12 * ZOOM);
+      hg.addColorStop(0, 'rgba(255,255,255,1)'); hg.addColorStop(0.5, 'rgba(' + f.c + ',0.7)'); hg.addColorStop(1, 'rgba(' + f.c + ',0)');
+      cx.fillStyle = hg; cx.beginPath(); cx.arc(hx, hy, 12 * ZOOM, 0, TAU); cx.fill();
+    } else if (f.kind === 'reticle') {
+      const age = time - f.t0, locked = age >= f.lock, pl = clamp(age / f.lock, 0, 1);
+      const fade = Math.min(1, a * 3);
+      cx.globalAlpha = fade;
+      cx.translate(sx, sy);
+      const R = f.r * ZOOM;
+      cx.strokeStyle = 'rgba(' + f.c + ',0.85)'; cx.lineWidth = 2.2 * ZOOM; cx.setLineDash([14 * ZOOM, 9 * ZOOM]);
+      cx.save(); cx.rotate(time * 0.6); cx.beginPath(); cx.ellipse(0, 0, R, R * 0.62, 0, 0, TAU); cx.stroke(); cx.restore();
+      cx.setLineDash([]);
+      cx.save(); cx.rotate(-time * 1.1);
+      cx.lineWidth = 1.6 * ZOOM; cx.strokeStyle = 'rgba(' + f.c + ',0.7)';
+      cx.beginPath(); cx.ellipse(0, 0, R * (0.55 + 0.45 * (1 - pl)), R * 0.62 * (0.55 + 0.45 * (1 - pl)), 0, 0, TAU); cx.stroke();
+      for (let k2 = 0; k2 < 4; k2++) { const aa = k2 * Math.PI / 2; cx.beginPath(); cx.moveTo(Math.cos(aa) * R * 0.45, Math.sin(aa) * R * 0.45 * 0.62); cx.lineTo(Math.cos(aa) * R * 0.62, Math.sin(aa) * R * 0.62 * 0.62); cx.stroke(); }
+      cx.restore();
+      cx.strokeStyle = 'rgba(255,255,255,' + (locked ? 0.9 : 0.5) + ')'; cx.lineWidth = 1.2 * ZOOM;
+      cx.beginPath(); cx.moveTo(-R * 0.2, 0); cx.lineTo(R * 0.2, 0); cx.moveTo(0, -R * 0.14); cx.lineTo(0, R * 0.14); cx.stroke();
+      const fg = cx.createRadialGradient(0, 0, 0, 0, 0, R);
+      fg.addColorStop(0, 'rgba(' + f.c + ',' + (locked ? 0.16 + 0.08 * Math.sin(time * 12) : 0.05 + 0.1 * pl) + ')'); fg.addColorStop(1, 'rgba(' + f.c + ',0)');
+      cx.fillStyle = fg; cx.beginPath(); cx.ellipse(0, 0, R, R * 0.62, 0, 0, TAU); cx.fill();
+      cx.fillStyle = 'rgba(255,255,255,0.9)'; cx.font = '700 ' + Math.round(13 * ZOOM) + 'px Rajdhani'; cx.textAlign = 'center';
+      cx.fillText(locked ? 'LOCKED' : 'TARGETING ' + Math.round(pl * 100) + '%', 0, -R * 0.62 - 10 * ZOOM);
+    } else if (f.kind === 'designator') {
+      const x1 = sx, y1 = sy - 18 * ZOOM, x2 = (f.x2 - camX) * ZOOM, y2 = (f.y2 - camY) * ZOOM;
+      const fl = 0.6 + 0.4 * Math.sin(time * 40);
+      cx.strokeStyle = 'rgba(' + f.c + ',' + 0.35 * fl + ')'; cx.lineWidth = 4 * ZOOM; cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
+      cx.strokeStyle = 'rgba(255,255,255,' + 0.8 * fl + ')'; cx.lineWidth = 1.1 * ZOOM; cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
+      const g = cx.createRadialGradient(x2, y2, 0, x2, y2, 10 * ZOOM);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(' + f.c + ',0)');
+      cx.fillStyle = g; cx.beginPath(); cx.arc(x2, y2, 10 * ZOOM, 0, TAU); cx.fill();
+    } else if (f.kind === 'laser') {
       const x1 = (f.x1 - camX) * ZOOM, y1 = (f.y1 - camY) * ZOOM, x2 = (f.x2 - camX) * ZOOM, y2 = (f.y2 - camY) * ZOOM;
       cx.lineCap = 'round';
       cx.globalAlpha = a * .32; cx.strokeStyle = f.c; cx.lineWidth = 12 * ZOOM;
@@ -1605,7 +2217,7 @@ function drawFxAll() {
       cx.fillStyle = lg;
       cx.beginPath(); cx.moveTo(0, -fr * .28); cx.lineTo(fr * 2.6, 0); cx.lineTo(0, fr * .28); cx.closePath(); cx.fill();
     } else if (f.kind === 'spk') {
-      cx.strokeStyle = 'rgba(' + f.c + ',' + a + ')'; cx.lineWidth = 1.8 * ZOOM; cx.lineCap = 'round';
+      cx.strokeStyle = 'rgba(' + f.c + ',' + a + ')'; cx.lineWidth = (f.w || 1.8) * ZOOM; cx.lineCap = 'round';
       cx.beginPath(); cx.moveTo(sx, sy);
       cx.lineTo(sx - f.vx * .05 * ZOOM, sy - f.vy * .05 * ZOOM); cx.stroke();
     } else if (f.kind === 'shock') {
@@ -1633,7 +2245,7 @@ function drawFxAll() {
       const gg = cx.createLinearGradient(sx, sy - 320 * ZOOM, sx, sy);
       gg.addColorStop(0, 'rgba(' + f.c + ',0)'); gg.addColorStop(0.75, 'rgba(' + f.c + ',' + a * 0.7 + ')'); gg.addColorStop(1, 'rgba(255,255,255,' + a + ')');
       cx.fillStyle = gg; cx.fillRect(sx - w2 / 2, sy - 320 * ZOOM, w2, 320 * ZOOM);
-      cx.fillStyle = 'rgba(255,255,255,' + a * 0.85 + ')';
+      cx.fillStyle = 'rgba(255,255,255,' + a * 0.85 * (f.core === undefined ? 1 : f.core) + ')';
       cx.fillRect(sx - w2 * 0.14, sy - 320 * ZOOM, w2 * 0.28, 320 * ZOOM);
     } else if (f.kind === 'scorch') {
       cx.globalCompositeOperation = 'source-over';
@@ -1739,7 +2351,7 @@ function frame(ts) {
         units.push(u);
       }
     }
-    if (DEMOF && time > 3 && time - (frame._choreo || 0) > 2.1) {
+    if (DEMOF && time > 3 && time - (frame._choreo || 0) > 2.1 && !(window.DV_QA && DV_QA.noChoreo)) {
       frame._choreo = time;
       const ready = heroes.filter(h => !h.dead).map(h => {
         const abs = [0, 1, 2, 3].filter(i => h.level >= (h.hero.abilities[i].ult ? 6 : [1, 2, 3][i] || 1) && time >= h.abCd[i]);
@@ -1759,12 +2371,13 @@ function frame(ts) {
     heroesThink(dt);
     if (NET.on && !NET.guest) { NET.snapT += dt; if (NET.snapT >= 0.1) { NET.snapT = 0; sendSnap(); } }
     }
+    tickBastille(dt);
     // projectiles (skillshots)
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const p = projectiles[i];
       const step = p.sp * dt;
       p.x += Math.cos(p.ang) * step; p.y += Math.sin(p.ang) * step; p.left -= step;
-      fxPush({ kind: 'spk', x: p.x, y: p.y, vx: -Math.cos(p.ang) * 120, vy: -Math.sin(p.ang) * 120, life: .12, max: .12, c: p.c });
+      if (!p.tracer) fxPush({ kind: 'spk', x: p.x, y: p.y, vx: -Math.cos(p.ang) * 120, vy: -Math.sin(p.ang) * 120, life: .12, max: .12, c: p.c });
       let hit = null;
       for (const t of units) if (!t.dead && t.team !== p.team && t.team !== 2 && Math.hypot(t.x - p.x, t.y - p.y) < t.r + 14) { hit = t; break; }
       if (!hit) for (const t of units) if (!t.dead && t.team === 2 && p.src.kind === 'hero' && Math.hypot(t.x - p.x, t.y - p.y) < t.r + 14) { hit = t; break; }
@@ -1772,10 +2385,10 @@ function frame(ts) {
         dealDamage(hit, p.dmg, p.src);
         onAbilityHit(p.src, hit);
         if (p.src && p.src.hkey === 'ravener') { p.src.qMark = { t: hit, until: time + 3 }; hit._sigil = time + 3; if (p.src === player) feed('Sigil planted — press Q again to LUNGE.'); }
-        sparks(p.x, p.y, p.ang, p.c, 1.4);
-        fxPush({ kind: 'shock', x: p.x, y: p.y, life: .3, max: .3, r: 34, c: p.c });
+        if (p.tracer) { sparks(p.x, p.y, p.ang, p.c, 0.9); fxPush({ kind: 'flash', x: p.x, y: p.y, life: .09, max: .09, r: 18 }); debris(p.x, p.y, 1); if (Math.random() < 0.4) sheetFx('fx_hit_cyan', { x: hit.x, y: hit.y, size: 64 }); addShake(p.x, p.y, 0.9); }
+        else { sparks(p.x, p.y, p.ang, p.c, 1.4); fxPush({ kind: 'shock', x: p.x, y: p.y, life: .3, max: .3, r: 34, c: p.c }); }
         projectiles.splice(i, 1);
-      } else if (p.left <= 0) projectiles.splice(i, 1);
+      } else if (p.left <= 0) { if (p.tracer) { fxPush({ kind: 'dust', x: p.x, y: p.y, life: .35, max: .35, r: 14 }); sparks(p.x, p.y, p.ang, p.c, 0.5); } projectiles.splice(i, 1); }
     }
     // telegraphs
     for (let i = telegraphs.length - 1; i >= 0; i--) {
@@ -1786,6 +2399,26 @@ function frame(ts) {
       const f = fx[i]; f.life -= dt;
       if (f.kind === 'spk') { f.x += f.vx * dt; f.y += f.vy * dt; f.vy += 260 * dt; f.vx *= .9; }
       else if (f.kind === 'dmg') { f.y += f.vy * dt; f.vy *= 0.93; }
+      else if (f.kind === 'casing') { f.x += f.vx * dt; f.y += f.vy * dt; f.vy += 900 * dt; f.rot += (f.rv || 12) * dt; if (f.floor === undefined) f.floor = f.y + 22; if (f.y > f.floor && f.vy > 0) { f.y = f.floor; f.vy *= -0.35; f.vx *= 0.6; f.rv *= 0.5; } }
+      else if (f.kind === 'smoke') { f.x += f.vx * dt; f.y += f.vy * dt; f.vx *= 0.97; f.vy *= 0.97; }
+      else if (f.kind === 'debris') { f.x += f.vx * dt; f.y += f.vy * dt; f.z += f.vz * dt; f.vz -= 900 * dt; f.rot += 9 * dt; if (f.z < 0) { f.z = 0; f.vz *= -0.38; f.vx *= 0.6; f.vy *= 0.6; } }
+      else if (f.kind === 'missile') {
+        const age = f.max - f.life, p = clamp((age - f.delay) / (f.max - f.delay), 0, 1);
+        if (age >= f.delay) {
+          const q = 1 - p, px = q * q * f.x0 + 2 * q * p * f.ax + p * p * f.x2, py = q * q * f.y0 + 2 * q * p * f.ay + p * p * f.y2;
+          f.vx = (px - f.x) / Math.max(dt, .001); f.vy = (py - f.y) / Math.max(dt, .001); f.x = px; f.y = py; f.p = p;
+          f.smokeT += dt;
+          if (f.smokeT > 0.024) { f.smokeT = 0; fxPush({ kind: 'smoke', x: px, y: py, vx: (Math.random() - .5) * 20, vy: -8, life: .85, max: .85, r: 8, grow: 34, lite: true }); }
+          if (Math.random() < 0.5) fxPush({ kind: 'spk', x: px, y: py, vx: -f.vx * 0.18 + (Math.random() - .5) * 40, vy: -f.vy * 0.18 + (Math.random() - .5) * 40, life: .16, max: .16, c: '255,190,110' });
+          if (p >= 1 && !f.landed) { f.landed = true; f.life = 0; if (f.onLand) f.onLand(); }
+        }
+      }
+      else if (f.kind === 'fire') {
+        f.tickT += dt;
+        if (f.tickT >= 0.5 && f.src) { f.tickT = 0;
+          for (const t of units) if (foesOf(f.src)(t) && Math.hypot(t.x - f.x, t.y - f.y) < f.r + t.r) { dealDamage(t, Math.round(10 + 4 * f.src.level), f.src); t.haste = Math.min(t.haste || 1, 0.7); t.hasteT = Math.max(t.hasteT || 0, time + 0.6); } }
+      }
+      else if ((f.kind === 'cone' || f.kind === 'spinup' || f.kind === 'designator') && f.follow) { f.x = f.follow.x; f.y = f.follow.y; if (f.follow.dead || (f.kind !== 'designator' && !f.follow.chan)) f.life = 0; }
       else if (f.kind === 'ghost' && f.rise) { f.y -= 26 * dt; }
       else if (f.kind === 'runes' && f.follow && !f.follow.dead) { f.x = f.follow.x; f.y = f.follow.y; }
       if (f.life <= 0) fx.splice(i, 1);
@@ -1843,16 +2476,23 @@ function frame(ts) {
     cx.restore();
   }
   drawBrush();
+  drawFxAll('ground');
   for (const tw of towers) drawTower(tw);
   const zs = units.slice().sort((a, b) => (a.kind === 'hero' ? 1 : 0) - (b.kind === 'hero' ? 1 : 0) || a.y - b.y);
   for (const u of zs) if (!u.dead && isVisible(u)) drawUnit(u);
-  drawFxAll();
+  drawFxAll('air');
   cx.restore();
   drawFog();
   // vignette
   const vg = cx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * .45, VW / 2, VH / 2, Math.max(VW, VH) * .75);
   vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.42)');
   cx.fillStyle = vg; cx.fillRect(0, 0, VW, VH);
+  if (time < ultT) {                                         // ULT CEREMONY — edge tint, exclusive to ults (VFX rule 10)
+    const ua = Math.min(1, (ultT - time) / 0.6) * (0.42 + 0.12 * Math.sin(time * 9));
+    const ug = cx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * .38, VW / 2, VH / 2, Math.max(VW, VH) * .72);
+    ug.addColorStop(0, 'rgba(' + ultC + ',0)'); ug.addColorStop(1, 'rgba(' + ultC + ',' + ua + ')');
+    cx.save(); cx.globalCompositeOperation = 'lighter'; cx.fillStyle = ug; cx.fillRect(0, 0, VW, VH); cx.restore();
+  }
   // death overlay
   { const rp = $('respawn');
     if (player.dead) { rp.classList.remove('hidden'); rp.querySelector('b').textContent = Math.max(0, Math.ceil(player.respT - time)); }
@@ -1924,13 +2564,15 @@ function startGame(hk) {
   // four means one mirror match — the lane rival)
   let rest = all.filter(k => k !== hk).sort(() => Math.random() - .5);
   let allies = rest.slice(0, 2);
-  if (DEMOF) allies = ['corwen', 'ravener'];
+  // demo: put the WHOLE roster on the field (2 allies + the other 3 as enemies) so a
+  // capture shows every champion's sprite at once instead of the same three every time
+  if (DEMOF) allies = all.filter(k => k !== hk).slice(0, 2);
   allies.forEach((k, i) => {
     const h = mkHero(0, k, 380, MID_Y + 90 + i * 60);
     h.lane = i === 0 ? 1 : 2;                      // ally 1 bot lane, ally 2 jungles
     heroes.push(h);
   });
-  const epool = DEMOF ? ['ravener', 'corwen', 'bastille'] : all.sort(() => Math.random() - .5).slice(0, 3);
+  const epool = DEMOF ? all.filter(k => k !== hk && !allies.includes(k)) : all.sort(() => Math.random() - .5).slice(0, 3);
   epool.forEach((k, i) => {
     const h = mkHero(1, k, WORLD.w - 380, MID_Y + (i - 1) * 80);
     h.lane = i;                                     // top / bot / jungle
@@ -1977,7 +2619,10 @@ function startGame(hk) {
   $('load').classList.add('hidden');
   const hp = $('heroes');
   for (const hk of Object.keys(HEROES)) hp.appendChild(heroCard(hk));
-  if (DEMOF) startGame('liora');
+  if (DEMOF) {                              // ?hero=<key> picks who the demo plays (QA hook)
+    const hp = (location.search.match(/[?&]hero=([a-z]+)/) || [])[1];
+    startGame(HEROES[hp] ? hp : 'liora');
+  }
   else $('pick').classList.remove('hidden');
   requestAnimationFrame(ts => { last = ts; requestAnimationFrame(frame); });
 })();
@@ -2001,7 +2646,8 @@ function sendSnap() {
     t: 'snap', tm: Math.round(time * 100) / 100, gold,
     u: units.filter(u => !u.dead).map(u => [u.id, u.team, u.key, Math.round(u.x), Math.round(u.y),
       Math.round(u.face * 100) / 100, Math.ceil(u.hp), u.maxHp, u.level || 0, u.moving ? 1 : 0,
-      u.hkey || '', u.sh > 0 ? Math.round(u.sh) : 0, u.buff || '', u.kind]),
+      u.hkey || '', u.sh > 0 ? Math.round(u.sh) : 0, u.buff || '', u.kind,
+      u.atkPhase === 'WINDUP' && u.wuLen > 0 ? Math.min(99, Math.round(u.atkTimer / u.wuLen * 99)) : -1]),
     tw: towers.map(t2 => Math.ceil(t2.hp)),
     al: [Math.round(ALTAR.prog * 100) / 100, ALTAR.owner, ALTAR.capTeam, Math.round((ALTAR.lockT - time) * 10) / 10],
     seats: NET.conns.map(c => {
@@ -2019,8 +2665,10 @@ function applyCmd(d, c) {
   if (!h || h.dead) return;
   if (d.t === 'order') orderFor(h, clamp(+d.x || 0, 0, WORLD.w), clamp(+d.y || 0, 0, WORLD.h));
   else if (d.t === 'cast') castAbility(h, Math.min(3, Math.max(0, d.i | 0)), clamp(+d.x || h.x, 0, WORLD.w), clamp(+d.y || h.y, 0, WORLD.h));
+  else if (d.t === 'amove') attackMoveFor(h, clamp(+d.x || 0, 0, WORLD.w), clamp(+d.y || 0, 0, WORLD.h));
   else if (d.t === 'recall') { if (!h.recallT) h.recallT = time + 4; }
-  else if (d.t === 'stop') { h.order = null; h.target = null; }
+  else if (d.t === 'hold') { h.order = null; h.amove = null; }
+  else if (d.t === 'stop') { h.order = null; h.target = null; h.amove = null; cancelWindup(h); if (h.chan && h.chan.kind === 'gat') h.chan = null; }
 }
 
 /* ------------------------------ guest sim ------------------------------ */
@@ -2054,6 +2702,10 @@ function applySnap(d) {
     if (u.nx === undefined || Math.hypot(a[3] - u.x, a[4] - u.y) > 240) { u.x = a[3]; u.y = a[4]; }
     u.nx = a[3]; u.ny = a[4]; u.face = a[5]; u.hp = a[6]; u.maxHp = a[7];
     u.level = a[8] || u.level; u.movingNet = a[9]; u.sh = a[11]; u.buff = a[12] || null;
+    // replay the host's windup phase so guests see the same rooted tell / cast-raise
+    const wp = a[14];
+    if (wp !== undefined && wp >= 0) { u.atkPhase = 'WINDUP'; u.wuLen = 1; u.atkTimer = wp / 99; }
+    else if (u.atkPhase === 'WINDUP') { u.atkPhase = null; u.atkTimer = 0; }
     if (u.dead) { u.dead = false; }
     u.netSeen = true;
     seen.add(u.id);
@@ -2198,3 +2850,13 @@ function onGuestPlayerReady() {
   b('mpGo', netJoin);
   b('mpStart', netStartMatch);
 })();
+
+/* Debug/QA handle. Everything in this file is script-scoped (not on window), which
+ * makes headless verification impossible to do honestly — a QA script could only
+ * screenshot and guess. This exposes read-only live state so a probe can assert the
+ * sim, not infer it. */
+window.DV = {
+  get heroes() { return heroes; }, get units() { return units; }, get time() { return time; },
+  get player() { return player; }, get anims() { return ANIMS; }, MOTION,
+  attackMove: attackMoveFor, cancelWindup, orderFor, cast: castAbility, get fx() { return fx; }, get projectiles() { return projectiles; },
+};
