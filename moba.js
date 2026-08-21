@@ -159,10 +159,10 @@ const HEROES = {
     desc: 'Ranged caster. Bolts of daylight, a burst of storm, a shield of dawn — and one beam that ends arguments.',
     hp: 520, hpG: 62, dmg: 52, dmgG: 7, range: 330, cd: 1.05, speed: 175, r: 16,
     abilities: [
-      { k: 'Q', name: 'LIGHTBOLT', icon: '☄', type: 'bolt', cd: 4, range: 560, dmg: l => 70 + 26 * l, speed: 900 },
-      { k: 'W', name: 'SUNBURST', icon: '☀', type: 'aoe', cd: 9, range: 520, radius: 130, delay: 0.55, dmg: l => 90 + 32 * l },
-      { k: 'E', name: 'AEGIS', icon: '⛨', type: 'shield', cd: 12, amount: l => 90 + 40 * l, dur: 3 },
-      { k: 'R', name: 'FINAL LIGHT', icon: '✴', type: 'beam', cd: 55, range: 950, width: 70, dmg: l => 260 + 120 * l, ult: true },
+      { k: 'Q', name: 'LIGHTBOLT', icon: '☄', type: 'bolt', cd: 5, range: 560, dmg: l => 70 + 26 * l, speed: 900 },
+      { k: 'W', name: 'SUNBURST', icon: '☀', type: 'aoe', cd: 5, range: 520, radius: 130, delay: 0.55, dmg: l => 90 + 32 * l },
+      { k: 'E', name: 'AEGIS', icon: '⛨', type: 'shield', cd: 5, amount: l => 90 + 40 * l, dur: 3 },
+      { k: 'R', name: 'FINAL LIGHT', icon: '✴', type: 'beam', cd: 5, range: 950, width: 70, dmg: l => 260 + 120 * l, ult: true },
     ],
   },
   corwen: {
@@ -171,9 +171,9 @@ const HEROES = {
     hp: 680, hpG: 84, dmg: 64, dmgG: 9, range: 70, cd: 0.95, speed: 172, r: 17,   // bruiser: heaviest feet of the melee pair
     abilities: [
       { k: 'Q', name: 'CLEAVE', icon: '⚔', type: 'arc', cd: 5, radius: 160, dmg: l => 85 + 30 * l },
-      { k: 'W', name: 'CHARGE', icon: '➤', type: 'dash', cd: 10, range: 430, radius: 100, dmg: l => 60 + 24 * l },
-      { k: 'E', name: 'RALLY', icon: '⛨', type: 'shield', cd: 13, amount: l => 110 + 45 * l, dur: 3, haste: 1.3 },
-      { k: 'R', name: 'DAYBREAK', icon: '✹', type: 'whirl', cd: 60, radius: 230, ticks: 3, dmg: l => 110 + 55 * l, ult: true },
+      { k: 'W', name: 'CHARGE', icon: '➤', type: 'dash', cd: 5, range: 430, radius: 100, dmg: l => 60 + 24 * l },
+      { k: 'E', name: 'RALLY', icon: '⛨', type: 'shield', cd: 5, amount: l => 110 + 45 * l, dur: 3, haste: 1.3 },
+      { k: 'R', name: 'DAYBREAK', icon: '✹', type: 'whirl', cd: 5, radius: 230, ticks: 3, dmg: l => 110 + 55 * l, ult: true },
     ],
   },
   bastille: {
@@ -188,10 +188,10 @@ const HEROES = {
      *  R ORBITAL BARRAGE — anchor-down + laser designator + targeting reticle, then 12 shells rain from orbit; the
      *                      final shell cracks the ground, knocks enemies back and leaves a burning zone that slows. */
     abilities: [
-      { k: 'Q', name: 'GATLING SALVO', icon: '◎', type: 'gatling', cd: 3.5, range: 620, dur: 1.5, rate: 0.11, spread: 0.12, dmg: l => 22 + 8 * l },
-      { k: 'W', name: 'ROCKET SWARM', icon: '♨', type: 'rockets', cd: 5.5, range: 640, radius: 150, count: 10, dmg: l => 24 + 8 * l },
-      { k: 'E', name: 'THRUSTER VAULT', icon: '⏩', type: 'vault', cd: 6, range: 300, dur: 3.5, haste: 1.4, radius: 110, jumpT: 0.72, jumpH: 135, dmg: l => 40 + 14 * l },
-      { k: 'R', name: 'ORBITAL BARRAGE', icon: '☠', type: 'orbital', cd: 35, range: 800, radius: 260, shells: 10, anchor: 1.3, gap: 0.34, dmg: l => 80 + 34 * l, ult: true },
+      { k: 'Q', name: 'GATLING SALVO', icon: '◎', type: 'gatling', cd: 5, range: 620, dur: 1.5, rate: 0.11, spread: 0.12, dmg: l => 22 + 8 * l },
+      { k: 'W', name: 'ROCKET SWARM', icon: '♨', type: 'rockets', cd: 5, range: 640, radius: 150, count: 10, dmg: l => 24 + 8 * l },
+      { k: 'E', name: 'THRUSTER VAULT', icon: '⏩', type: 'vault', cd: 5, range: 300, dur: 3.5, haste: 1.4, radius: 110, jumpT: 0.72, jumpH: 135, dmg: l => 40 + 14 * l },
+      { k: 'R', name: 'ORBITAL BARRAGE', icon: '☠', type: 'orbital', cd: 5, range: 800, radius: 260, shells: 10, anchor: 1.3, gap: 0.34, dmg: l => 80 + 34 * l, ult: true },
     ],
   },
   sovereign: {
@@ -199,10 +199,10 @@ const HEROES = {
     desc: 'A VECTRA capital ship answering the front in person. Broadsides, a point-defense screen, an overdrive ram — and a spinal lance that splits the field.',
     hp: 940, hpG: 105, dmg: 58, dmgG: 8, range: 340, cd: 1.1, speed: 132, r: 24,
     abilities: [
-      { k: 'Q', name: 'BROADSIDE', icon: '◫', type: 'burst', cd: 7, range: 520, shots: 6, dmg: l => 30 + 12 * l },
-      { k: 'W', name: 'AEGIS SCREEN', icon: '⬡', type: 'shield', cd: 13, dur: 3.5, amount: l => 180 + 60 * l },
-      { k: 'E', name: 'OVERDRIVE RAM', icon: '⏩', type: 'dash', cd: 11, range: 340, radius: 130, dmg: l => 70 + 26 * l },
-      { k: 'R', name: 'YAMATO LANCE', icon: '☄', type: 'beam', cd: 75, range: 820, width: 120, dmg: l => 300 + 120 * l, ult: true },
+      { k: 'Q', name: 'BROADSIDE', icon: '◫', type: 'burst', cd: 5, range: 520, shots: 6, dmg: l => 30 + 12 * l },
+      { k: 'W', name: 'AEGIS SCREEN', icon: '⬡', type: 'shield', cd: 5, dur: 3.5, amount: l => 180 + 60 * l },
+      { k: 'E', name: 'OVERDRIVE RAM', icon: '⏩', type: 'dash', cd: 5, range: 340, radius: 130, dmg: l => 70 + 26 * l },
+      { k: 'R', name: 'YAMATO LANCE', icon: '☄', type: 'beam', cd: 5, range: 820, width: 120, dmg: l => 300 + 120 * l, ult: true },
     ],
   },
   ravener: {
@@ -210,10 +210,10 @@ const HEROES = {
     desc: 'The pit answers her. Acid, broodlings, a killing lunge — and an orbital brimstone strike called down from the dark.',
     hp: 580, hpG: 70, dmg: 50, dmgG: 7, range: 260, cd: 0.9, speed: 186, r: 17,   // assassin: fastest hero on the field
     abilities: [
-      { k: 'Q', name: 'ACID SPIT', icon: '☢', type: 'bolt', cd: 4.5, range: 520, dmg: l => 65 + 24 * l, speed: 780 },
-      { k: 'W', name: 'BROOD', icon: '♟', type: 'spawn', cd: 16, count: 3, life: 18 },
-      { k: 'E', name: 'LUNGE', icon: '➤', type: 'dash', cd: 9, range: 380, radius: 90, dmg: l => 55 + 20 * l },
-      { k: 'R', name: 'ORBITAL BRIMSTONE', icon: '♨', type: 'nuke', cd: 80, range: 1500, radius: 270, delay: 2.2, dmg: l => 420 + 160 * l, ult: true },
+      { k: 'Q', name: 'ACID SPIT', icon: '☢', type: 'bolt', cd: 5, range: 520, dmg: l => 65 + 24 * l, speed: 780 },
+      { k: 'W', name: 'BROOD', icon: '♟', type: 'spawn', cd: 5, count: 3, life: 18 },
+      { k: 'E', name: 'LUNGE', icon: '➤', type: 'dash', cd: 5, range: 380, radius: 90, dmg: l => 55 + 20 * l },
+      { k: 'R', name: 'ORBITAL BRIMSTONE', icon: '♨', type: 'nuke', cd: 5, range: 1500, radius: 270, delay: 2.2, dmg: l => 420 + 160 * l, ult: true },
     ],
   },
   /* KORVAX, THE TITAN (Tee 2026-08-21: "a new character inspired by thanos and his cgi rings — incorporate the fight-scene CGI as his
@@ -224,10 +224,10 @@ const HEROES = {
     desc: 'A warlord from beyond the veil. A fist that splits the ground with violet lightning, rune-rings that lash and bind, a portal he steps through — and a singularity that swallows the fight whole.',
     hp: 980, hpG: 110, dmg: 70, dmgG: 9, range: 80, cd: 1.05, speed: 160, r: 20,
     abilities: [
-      { k: 'Q', name: 'POWER BLAST', icon: '✊', type: 'pblast', cd: 7, range: 440, width: 70, charge: 0.4, dmg: l => 110 + 36 * l },
-      { k: 'W', name: 'RUNE RINGS', icon: '◎', type: 'rings', cd: 14, dur: 5, reach: 230, dmg: l => 45 + 16 * l },
-      { k: 'E', name: 'RING PORTAL', icon: '⊚', type: 'portal', cd: 11, range: 460, radius: 90, dmg: l => 50 + 18 * l },
-      { k: 'R', name: 'SINGULARITY', icon: '●', type: 'singularity', cd: 60, range: 700, radius: 270, pull: 1.6, dmg: l => 260 + 110 * l, ult: true },
+      { k: 'Q', name: 'POWER BLAST', icon: '✊', type: 'pblast', cd: 5, range: 440, width: 70, charge: 0.4, dmg: l => 110 + 36 * l },
+      { k: 'W', name: 'RUNE RINGS', icon: '◎', type: 'rings', cd: 5, dur: 5, reach: 230, dmg: l => 45 + 16 * l },
+      { k: 'E', name: 'RING PORTAL', icon: '⊚', type: 'portal', cd: 5, range: 460, radius: 90, dmg: l => 50 + 18 * l },
+      { k: 'R', name: 'SINGULARITY', icon: '●', type: 'singularity', cd: 5, range: 700, radius: 270, pull: 1.6, dmg: l => 260 + 110 * l, ult: true },
     ],
   },
 };
@@ -328,7 +328,7 @@ function mkHero(team, hkey, x, y) {
 }
 function heroStat(u) {
   const h = u.hero, l = u.level;
-  u.maxHp = Math.round((h.hp + h.hpG * (l - 1)) * 1.85) + itemStat(u, 'hp');
+  u.maxHp = Math.round((h.hp + h.hpG * (l - 1)) * 1.85 * (u === player && !DEMOF ? 1.45 : 1)) + itemStat(u, 'hp');   // Tee 2026-08-21: the human player is harder to kill (+45%)
   u.dmg = h.dmg + h.dmgG * (l - 1);
   if (DEMOF) u.maxHp = Math.round(u.maxHp * (u.kind === 'hero' ? (u === player ? 14 : 8) : 3));
 }
@@ -502,7 +502,7 @@ function kill(t, src) {
         else feed(t.hero.name + ' slain by your ally.');
       } else feed('Your ally ' + t.hero.name + ' has fallen.');
       if (srcHero) grantXp(srcHero, 150 + 40 * t.level);
-      t.respT = time + (DEMOF ? 1.5 : 4 + 1.5 * t.level);
+      t.respT = time + (DEMOF ? 1.5 : 3);   // Tee 2026-08-21: respawn 3s flat
       t.recallT = 0;
     } else if (t.kind === 'brood') { /* nothing */ }
   } else if (t.plate) {                                      // a tower
