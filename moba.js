@@ -91,6 +91,7 @@ async function loadAll() {
       })());
       // DIRECTIONAL sheets (Tee 2026-08-21: "when I move up his body turns, I can see his back — total 360"):
       // optional `${u}_n_${a}` (back view) and `${u}_s_${a}` (front view). Side view = the base sheet (flipped for west).
+      if (a === 'idle') jobs.push((async () => { try { const r = await fetch(`assets/anim/${u}_top.atlas.json`); if (!r.ok) return; const meta = await r.json(); const img = await loadImg(`assets/anim/${u}_top.png`); ANIMS[u].top = { img, n: meta.frame_count || 1, fw: meta.frame_w, fh: meta.frame_h, fps: meta.fps || 8, bow: meta.bow_angle || 0 }; } catch (e) {} })());   // TOP-DOWN rotating sprite (Brood War BC smooth 360)
       for (const d of ['n', 's', 'ne', 'se']) jobs.push((async () => {   // 8-way: diagonals optional (Tee 2026-08-21 'Brood War Goliath 360 movement')
         try {
           const r = await fetch(`assets/anim/${u}_${d}_${a}.atlas.json`); if (!r.ok) return;
@@ -444,7 +445,7 @@ function dealDamage(t, amt, src) {
   if (TRAIN && t.team === 0) return;                      // TRAINING: your side cannot be hurt — only the enemies die
   if (DEMOF && t.plate) return;                    // demo: structures stay pristine
   if (t.hp === undefined || t.dead) return;
-  if (t.sh > 0) { const a = Math.min(t.sh, amt); t.sh -= a; amt -= a; if (t._matrix > time) { const sp = fx.find(f => f.kind === 'orbsphere' && f.follow === t); if (sp) { sp.hitT = time; sp.seed = (sp.seed || 1); const ha = src ? Math.atan2(src.y - t.y, src.x - t.x) : 0; fxPush({ kind: 'spk', x: t.x + Math.cos(ha) * sp.r, y: t.y - 14 + Math.sin(ha) * sp.r * 0.8, vx: Math.cos(ha) * 120, vy: Math.sin(ha) * 120, life: .25, max: .25, c: '200,255,255', w: 2.4 }); if (t.sh <= 0) { for (let i2 = 0; i2 < 40; i2++) { const a2 = Math.random() * TAU; fxPush({ kind: 'spk', x: t.x + Math.cos(a2) * sp.r, y: t.y - 14 + Math.sin(a2) * sp.r * 0.8, vx: Math.cos(a2) * (120 + Math.random() * 260), vy: Math.sin(a2) * (120 + Math.random() * 200) - 60, life: .5 + Math.random() * .4, max: .9, c: i2 % 2 ? '74,217,224' : '235,255,255', w: 2.6 }); } fxPush({ kind: 'shock', x: t.x, y: t.y - 14, life: .5, max: .5, r: sp.r * 1.3, c: '150,245,255' }); sp.life = Math.min(sp.life, 0.15); addShake(t.x, t.y, 6); } } else fxPush({ kind: 'matrixhit', x: t.x, y: t.y, life: .28, max: .28, r: (t.r || 18) + 34, ang: src ? Math.atan2(src.y - t.y, src.x - t.x) : 0 }); } }
+  if (t.sh > 0) { const a = Math.min(t.sh, amt); t.sh -= a; amt -= a; if (t._matrix > time) { const sp = fx.find(f => f.kind === 'orbsphere' && f.follow === t); if (sp) { sp.hitT = time; sp.seed = (sp.seed || 1); sp.hitA = src ? Math.atan2(src.y - t.y, src.x - t.x) : Math.random() * TAU; const ha = src ? Math.atan2(src.y - t.y, src.x - t.x) : 0; fxPush({ kind: 'spk', x: t.x + Math.cos(ha) * sp.r, y: t.y - 14 + Math.sin(ha) * sp.r * 0.8, vx: Math.cos(ha) * 120, vy: Math.sin(ha) * 120, life: .25, max: .25, c: '200,255,255', w: 2.4 }); if (t.sh <= 0) { for (let i2 = 0; i2 < 40; i2++) { const a2 = Math.random() * TAU; fxPush({ kind: 'spk', x: t.x + Math.cos(a2) * sp.r, y: t.y - 14 + Math.sin(a2) * sp.r * 0.8, vx: Math.cos(a2) * (120 + Math.random() * 260), vy: Math.sin(a2) * (120 + Math.random() * 200) - 60, life: .5 + Math.random() * .4, max: .9, c: i2 % 2 ? '74,217,224' : '235,255,255', w: 2.6 }); } fxPush({ kind: 'shock', x: t.x, y: t.y - 14, life: .5, max: .5, r: sp.r * 1.3, c: '150,245,255' }); sp.life = Math.min(sp.life, 0.15); addShake(t.x, t.y, 6); } } else fxPush({ kind: 'matrixhit', x: t.x, y: t.y, life: .28, max: .28, r: (t.r || 18) + 34, ang: src ? Math.atan2(src.y - t.y, src.x - t.x) : 0 }); } }
   t.hp -= amt; t.hitT = time;
   if (t.kind === 'hero' && src && src.kind) { t.lastHitBy = src; t.lastHitAt = time; }
   /* ON-HIT FLINCH + HITSTOP (motion spec §3.2) — the highest-ROI juice in 2D combat.
@@ -2251,6 +2252,51 @@ function drawMechPresence(u, sx, sy, size) {
   // vent steam while standing (cheap alive)
   if (!u.moving && !u.chan && !u.jump && Math.random() < 0.06) fxPush({ kind: 'smoke', x: sx === undefined ? u.x : u.x - fwd * 10 + (Math.random() - .5) * 10, y: u.y - 34, vx: (Math.random() - .5) * 14, vy: -22, life: .9, max: .9, r: 4, grow: 14 });
 }
+/* ROTATING UNIT (Tee 2026-08-21: 'Brood War battlecruiser 360 smoothness'): a single top-down plate rotated by the
+ * smoothed heading (vFace lerps with MOTION.turn, so a heavy ship banks into a turn slowly), hovering, with procedural
+ * engine flare at the stern that follows the heading, turret flashes on attack, and the same ground shadow/rings/HP UI. */
+function drawRotatingUnit(u, anims, sx, sy) {
+  const sheet = anims.top, M = motionOf(u);
+  let size = u.hkey === 'sovereign' ? 250 : 180;
+  if (u.vFace === undefined) u.vFace = u.face;
+  let dfc = u.face - u.vFace; while (dfc > Math.PI) dfc -= TAU; while (dfc < -Math.PI) dfc += TAU;
+  u.vFace += dfc * Math.min(1, M.turn * 1.1);
+  const lift = (u.hkey === 'sovereign' ? 26 : 0) + Math.sin(time * 1.5 + u.vPhase * 6.28) * M.bob;
+  u._lift = lift; u._dir = 'rot';
+  // ground shadow + team ring (same as drawUnit)
+  cx.save(); cx.translate(sx, sy + size * 0.30 * ZOOM); cx.scale(ZOOM, ZOOM);
+  cx.fillStyle = 'rgba(0,0,0,0.42)'; cx.beginPath(); cx.ellipse(0, 2, size * 0.34, size * 0.14, 0, 0, TAU); cx.fill();
+  cx.strokeStyle = 'rgba(' + TEAM[u.team].rgb + ',0.95)'; cx.lineWidth = 2.4; cx.beginPath(); cx.ellipse(0, 0, size * 0.36, size * 0.14, 0, 0, TAU); cx.stroke();
+  if (u === player) { cx.strokeStyle = u.amove ? 'rgba(255,150,60,0.95)' : 'rgba(255,233,168,0.8)'; cx.lineWidth = u.amove ? 2 : 1.4; cx.beginPath(); cx.ellipse(0, 0, size * 0.44, size * 0.18, 0, 0, TAU); cx.stroke(); }
+  cx.restore();
+  const heading = u.vFace + (sheet.bow || 0);
+  // ENGINE FLARE at the stern — follows the heading, brighter when moving / overdrive
+  const mv = u.moving || u._thrustT > time, fl = 0.7 + 0.3 * Math.sin(time * 30 + u.vPhase * 9), L = (mv ? 70 : 34) * fl;
+  cx.save(); cx.globalCompositeOperation = 'lighter'; cx.translate(sx, sy - lift * ZOOM); cx.rotate(heading);
+  for (const k of [-0.26, -0.09, 0.09, 0.26]) {
+    const ex = -size * 0.46 * ZOOM, ey = k * size * ZOOM;
+    const g = cx.createLinearGradient(ex, ey, ex - L * ZOOM, ey);
+    g.addColorStop(0, 'rgba(235,255,255,0.95)'); g.addColorStop(0.25, 'rgba(74,217,224,0.8)'); g.addColorStop(1, 'rgba(74,217,224,0)');
+    cx.strokeStyle = g; cx.lineCap = 'round'; cx.lineWidth = 7 * ZOOM; cx.beginPath(); cx.moveTo(ex, ey); cx.lineTo(ex - L * ZOOM, ey); cx.stroke();
+    const hg = cx.createRadialGradient(ex, ey, 0, ex, ey, 9 * ZOOM); hg.addColorStop(0, 'rgba(255,255,255,0.9)'); hg.addColorStop(1, 'rgba(74,217,224,0)'); cx.fillStyle = hg; cx.beginPath(); cx.arc(ex, ey, 9 * ZOOM, 0, TAU); cx.fill();
+  }
+  cx.restore();
+  // the ship: rotated, banked (slight roll into the turn), hit-flash + flinch like drawSheet
+  cx.save(); cx.translate(sx, sy - lift * ZOOM); cx.scale(ZOOM, ZOOM);
+  cx.rotate(heading);
+  const bank = clamp(dfc * 0.9, -0.18, 0.18); cx.scale(1, 1 - Math.abs(bank) * 0.25);
+  const hitAge = time - u.hitT; const pop = hitAge < 0.22 ? 1 + 0.05 * (1 - hitAge / 0.22) : 1; cx.scale(pop, pop);
+  cx.drawImage(sheet.img, 0, 0, sheet.fw, sheet.fh, -size / 2, -size / 2, size, size);
+  if (hitAge < 0.22 && hitAge >= 0) { cx.globalCompositeOperation = 'lighter'; cx.globalAlpha = 0.7 * (1 - hitAge / 0.22); cx.drawImage(sheet.img, 0, 0, sheet.fw, sheet.fh, -size / 2, -size / 2, size, size); }
+  // turret flash on attack (bow-side hardpoints)
+  const atkAge = time - u.atkT;
+  if (atkAge >= 0 && atkAge < 0.14) { cx.globalCompositeOperation = 'lighter'; cx.globalAlpha = 1 - atkAge / 0.14; for (const [tx2, ty2] of [[size * 0.25, -size * 0.12], [size * 0.25, size * 0.12], [size * 0.02, 0]]) { const g = cx.createRadialGradient(tx2, ty2, 0, tx2, ty2, 12); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.4, 'rgba(120,240,255,0.8)'); g.addColorStop(1, 'rgba(74,217,224,0)'); cx.fillStyle = g; cx.beginPath(); cx.arc(tx2, ty2, 12, 0, TAU); cx.fill(); } }
+  cx.restore();
+  u.moving = false;
+  if (u.hkey === 'bastille') drawMechPresence(u, sx, sy - lift * ZOOM, size);
+  // shield ring + HP bar (reuse drawUnit's tail by calling the shared painter)
+  drawUnitUI(u, sx, sy, size);
+}
 function drawUnit(u) {
   const sx = (u.x - camX) * ZOOM, sy = (u.y - camY) * ZOOM;
   if (sx < -140 || sy < -140 || sx > VW + 140 || sy > VH + 140) return;
@@ -2259,6 +2305,7 @@ function drawUnit(u) {
   const state = ((u.atkPhase === 'WINDUP' || time - u.atkT < 0.34) && anims.attack) ? 'attack'
     : (u.moving && anims.walk ? 'walk' : 'idle');
   u._atkAnim = state === 'attack';
+  if (anims.top && !isSkinned(u)) { drawRotatingUnit(u, anims, sx, sy); return; }     // true 360: the sprite itself turns with the heading
   // facing → view. 8-WAY when diagonal sheets exist (ne/se + mirrors), else 4-way (n/s + mirrored side), else side-only.
   // Sectors are 45° wide with a little hysteresis so the heading doesn't chatter at the boundaries.
   const vf = u.vFace === undefined ? u.face : u.vFace;
@@ -2335,6 +2382,9 @@ function drawUnit(u) {
   if (u.hkey === 'bastille' && !isSkinned(u)) drawMechPresence(u, sx, sy - lift * ZOOM, size);
   u.moving = false;   // consumed by the next tick. MUST be reset AFTER drawSheet — clearing it
                       // first meant the procedural stride bob/gait sway never ran at all.
+  drawUnitUI(u, sx, sy, size);
+}
+function drawUnitUI(u, sx, sy, size) {
   // shield ring
   if (u.sh > 0) {
     cx.save(); cx.globalCompositeOperation = 'lighter';
@@ -2369,6 +2419,7 @@ function drawUnit(u) {
     }
   }
 }
+
 function drawTower(tw) {
   const sx = (tw.x - camX) * ZOOM, sy = (tw.y - camY) * ZOOM;
   if (sx < -260 || sy < -260 || sx > VW + 260 || sy > VH + 260) return;
@@ -2511,16 +2562,18 @@ function drawFxAll(layer) {
       g.addColorStop(0, 'rgba(74,217,224,0.06)'); g.addColorStop(0.72, 'rgba(74,217,224,0.16)'); g.addColorStop(0.95, 'rgba(150,245,255,0.55)'); g.addColorStop(1, 'rgba(74,217,224,0)');
       cx.fillStyle = g; cx.beginPath(); cx.ellipse(sx, cy0, R * 1.05, R * 0.9, 0, 0, TAU); cx.fill();
       cx.save(); cx.beginPath(); cx.ellipse(sx, cy0, R * 1.05, R * 0.9, 0, 0, TAU); cx.clip();
-      cx.strokeStyle = 'rgba(120,240,255,' + (0.28 + 0.12 * Math.sin(time * 3)) + ')'; cx.lineWidth = 1 * ZOOM;
+      cx.strokeStyle = 'rgba(150,230,255,' + (0.10 + 0.06 * Math.sin(time * 3)) + ')'; cx.lineWidth = 1 * ZOOM;   // SC matrix: soft translucent sphere, lattice barely there
       const hs = 13 * ZOOM, offy = (time * 14) % (hs * 1.73);
       for (let row = -R / hs - 1; row < R / hs + 1; row++) for (let col = -R / hs - 1; col < R / hs + 1; col++) { const hx = sx + col * hs * 1.5, hy = cy0 + (row + (col % 2 ? 0.5 : 0)) * hs * 1.73 + offy; cx.beginPath(); for (let k2 = 0; k2 < 6; k2++) { const aa = k2 / 6 * TAU; const px = hx + Math.cos(aa) * hs * 0.55, py = hy + Math.sin(aa) * hs * 0.55; k2 ? cx.lineTo(px, py) : cx.moveTo(px, py); } cx.closePath(); cx.stroke(); }
       // CRACKS: grow with lost integrity (seeded jagged lines radiating from impact points)
-      const nCr = Math.round((1 - integ) * 10);
+      const nCr = integ < 0.4 ? Math.round((0.4 - integ) / 0.4 * 10) : 0;   // cracks only once it is really failing
       if (nCr > 0) { cx.strokeStyle = 'rgba(255,255,255,0.85)'; cx.lineWidth = 1.6 * ZOOM; cx.lineCap = 'round';
         for (let c2 = 0; c2 < nCr; c2++) { const a0 = c2 * 2.39 + (f.seed || 1); let px = sx + Math.cos(a0) * R * 0.7, py = cy0 + Math.sin(a0) * R * 0.6; cx.beginPath(); cx.moveTo(px, py); for (let k2 = 0; k2 < 5; k2++) { const aa = a0 + Math.PI + Math.sin(c2 * 3 + k2 * 2.1) * 0.9; px += Math.cos(aa) * R * 0.16; py += Math.sin(aa) * R * 0.14; cx.lineTo(px, py); } cx.stroke(); } }
       cx.restore();
       cx.strokeStyle = 'rgba(210,255,255,' + (0.85 * flick) + ')'; cx.lineWidth = 2.2 * ZOOM; cx.beginPath(); cx.ellipse(sx, cy0, R * 1.05, R * 0.9, 0, 0, TAU); cx.stroke();
-      if (hitAge < 0.3) { const hp2 = 1 - hitAge / 0.3; cx.strokeStyle = 'rgba(255,255,255,' + hp2 + ')'; cx.lineWidth = 5 * hp2 * ZOOM; cx.beginPath(); cx.ellipse(sx, cy0, R * 1.05 * (1 + 0.04 * (1 - hp2)), R * 0.9 * (1 + 0.04 * (1 - hp2)), 0, 0, TAU); cx.stroke(); }
+      if (hitAge < 0.3) { const hp2 = 1 - hitAge / 0.3; cx.strokeStyle = 'rgba(255,255,255,' + hp2 + ')'; cx.lineWidth = 5 * hp2 * ZOOM; cx.beginPath(); cx.ellipse(sx, cy0, R * 1.05 * (1 + 0.04 * (1 - hp2)), R * 0.9 * (1 + 0.04 * (1 - hp2)), 0, 0, TAU); cx.stroke();
+        // ABSORB SPARK (Brood War matrix): a bright blue-white starburst where the shot hit the shell
+        if (f.hitA !== undefined) { const hx = sx + Math.cos(f.hitA) * R * 1.05, hy = cy0 + Math.sin(f.hitA) * R * 0.9; const g3 = cx.createRadialGradient(hx, hy, 0, hx, hy, 34 * hp2 * ZOOM + 2); g3.addColorStop(0, 'rgba(255,255,255,' + hp2 + ')'); g3.addColorStop(0.35, 'rgba(150,230,255,' + 0.8 * hp2 + ')'); g3.addColorStop(1, 'rgba(74,217,224,0)'); cx.fillStyle = g3; cx.beginPath(); cx.arc(hx, hy, 34 * hp2 * ZOOM + 2, 0, TAU); cx.fill(); cx.strokeStyle = 'rgba(255,255,255,' + hp2 + ')'; cx.lineWidth = 1.5 * ZOOM; for (let k3 = 0; k3 < 6; k3++) { const aa = k3 / 6 * TAU + f.hitA; cx.beginPath(); cx.moveTo(hx, hy); cx.lineTo(hx + Math.cos(aa) * 22 * hp2 * ZOOM, hy + Math.sin(aa) * 22 * hp2 * ZOOM); cx.stroke(); } } }
       const rings = [[0.0, 0.45], [1.05, 0.75], [-1.05, 0.75]];
       for (const [rot, sq] of rings) { cx.save(); cx.translate(sx, cy0); cx.rotate(rot); cx.strokeStyle = 'rgba(74,217,224,0.35)'; cx.lineWidth = 1 * ZOOM; cx.setLineDash([4 * ZOOM, 6 * ZOOM]); cx.lineDashOffset = -time * 60; cx.beginPath(); cx.ellipse(0, 0, R, R * sq, 0, 0, TAU); cx.stroke(); cx.restore(); }
       // the drones: n of them spread over the three rings, each ring spinning at its own rate
