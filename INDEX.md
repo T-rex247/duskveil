@@ -6,6 +6,9 @@ Code now PUBLIC at github.com/T-rex247/duskveil under **AGPL-3.0** (Tee accepted
 
 # duskveil — INDEX
 
+## ENEMY CREATURE SKINS — 2026-08-21 (Tee: 'make the enemy always skin zergling-like creatures')
+`ENEMY_SKIN` map + `skinKey(u)`/`isSkinned(u)` in moba.js: every TEAM-1 hero is DRAWN as a Mawborn creature (corwen→pitbrute, liora/bastille→mawborn_ripper, sovereign→mawborn_wyrm; ravener already is one). Presentation only — kits/stats/hitboxes untouched; falls back to the hero sheet if a creature sheet is missing; Goliath-only visuals (mech presence, nano morph, thrusters, stomp) are skipped when skinned. New creature sheets: `mawborn_ripper` (zergling-like quadruped, plate `mawborn_ripper_1`) + `mawborn_wyrm` (flying brood-wyrm, plate `mawborn_wyrm_1`) — original designs, black chitin + ember. Sizes in `ENEMY_SKIN_SIZE`.
+
 ## BATTLECRUISER (formerly SOVEREIGN; hkey/assets `sovereign`) — 2026-08-21
 Tee: 'rename the ship to battlecruiser, make it look like [SC2 Battlecruiser ref] with the glowing teal, detailed, floating'. Built an ORIGINAL capital ship in that spirit (IP line held): Grok plate `battlecruiser_2` → clips `battlecruiser_{idle,walk,attack}` (hover bob / engine burn / broadside) → `--group` sheets (old in `_bak_2026-08-21b/`). Draw size 240 + constant `lift` 26 so it floats above its shadow. Walk-clip engine flares inflate the shared bbox (scale 0.276) — hence the bigger draw size.
 

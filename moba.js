@@ -48,7 +48,14 @@ const ANIMS = {};           // key -> {idle:{img,n,fw,fh,fps}, walk, attack}
 const FX = {};              // fxkey -> sheet
 const PLATES = {};          // plate key -> img
 const UNIT_SHEETS = ['vectra_sovereign', 'dawnmarch_corwen', 'dawnmarch_liora', 'dawnmarch_squire', 'dawnmarch_sunbow',
-  'vectra_bastille', 'mawborn_ravener', 'mawborn_cinderling', 'mawborn_imp', 'mawborn_fiend', 'mawborn_pitbrute'];
+  'vectra_bastille', 'mawborn_ravener', 'mawborn_cinderling', 'mawborn_imp', 'mawborn_fiend', 'mawborn_pitbrute', 'mawborn_ripper', 'mawborn_wyrm'];
+/* ENEMY CREATURE SKINS (Tee 2026-08-21: 'make the enemy always skin zergling-like creatures') — every team-1 hero is DRAWN as a
+ * Mawborn swarm creature regardless of the kit it runs. Pure presentation: stats/abilities/hitboxes untouched. Falls back to the
+ * hero's own sheet if a creature sheet is missing. Ravener is already a creature. */
+const ENEMY_SKIN = { corwen: 'mawborn_pitbrute', liora: 'mawborn_ripper', bastille: 'mawborn_ripper', sovereign: 'mawborn_wyrm' };
+const ENEMY_SKIN_SIZE = { mawborn_pitbrute: 150, mawborn_ripper: 125, mawborn_wyrm: 200 };
+function skinKey(u) { if (u.kind === 'hero' && u.team === 1 && ENEMY_SKIN[u.hkey]) { const k = ENEMY_SKIN[u.hkey]; if (ANIMS[k] && ANIMS[k].idle) return k; } return u.key; }
+function isSkinned(u) { return skinKey(u) !== u.key; }
 const FX_SHEETS = ['fx_hit_gold', 'fx_hit_cyan', 'fx_hit_ember', 'fx_muzzle_gold', 'fx_muzzle_cyan', 'fx_muzzle_ember',
   'fx_death_dawnmarch', 'fx_death_vectra', 'fx_death_mawborn', 'fx_proj_lightarrow', 'fx_proj_ionbolt_v3',
   'fx_proj_shell_v3', 'fx_proj_emberspit', 'fx_ability_finallight', 'fx_ability_daybreak'];
@@ -635,7 +642,7 @@ function castAbility(u, i, tx, ty, force) {
     const t2 = u.qMark.t; u.qMark = null;
     if (NET.on && !NET.guest && NET.evq.length < 120) NET.evq.push(['cast', u.id, 0, t2.x, t2.y]);
     const ang2 = Math.atan2(t2.y - u.y, t2.x - u.x);
-    for (let g2 = 1; g2 <= 3; g2++) fxPush({ kind: 'ghost', key: u.key, x: lerp(u.x, t2.x, g2 / 4), y: lerp(u.y, t2.y, g2 / 4), face: ang2, life: .3, max: .3, size: 120 });
+    for (let g2 = 1; g2 <= 3; g2++) fxPush({ kind: 'ghost', key: skinKey(u), x: lerp(u.x, t2.x, g2 / 4), y: lerp(u.y, t2.y, g2 / 4), face: ang2, life: .3, max: .3, size: 120 });
     u.x = t2.x - Math.cos(ang2) * 46; u.y = t2.y - Math.sin(ang2) * 46;
     u.face = ang2; u.order = null; u.castT = time; u.atkT = time;
     dealDamage(t2, Math.round(POTQ(u) + 0.35 * (t2.maxHp - t2.hp)), u);
@@ -708,7 +715,7 @@ function castAbility(u, i, tx, ty, force) {
       capTo(ab.range);
       const X = tx, Y = ty;
       fxPush({ kind: 'laser', x1: u.x, y1: u.y, x2: X, y2: Y, life: .2, max: .2, c: 'rgb(' + lrgb + ')' });
-      for (let g2 = 1; g2 <= 3; g2++) fxPush({ kind: 'ghost', key: u.key, x: lerp(u.x, X, g2 / 4), y: lerp(u.y, Y, g2 / 4), face: u.face, life: .34, max: .34, size: 120 });
+      for (let g2 = 1; g2 <= 3; g2++) fxPush({ kind: 'ghost', key: skinKey(u), x: lerp(u.x, X, g2 / 4), y: lerp(u.y, Y, g2 / 4), face: u.face, life: .34, max: .34, size: 120 });
       u.x = X; u.y = Y; u.order = null; u.face = ang;
       if (ab.dmg) aoeDamage(X, Y, ab.radius, ab.dmg(l), u);
       fxPush({ kind: 'shock', x: X, y: Y, life: .35, max: .35, r: ab.radius || 80, c: lrgb });
@@ -1040,7 +1047,7 @@ function tickBastille(dt) {
         hitstop = Math.max(hitstop, 0.04);
       }
     }
-    if (u.hkey !== 'bastille') continue;
+    if (u.hkey !== 'bastille' || isSkinned(u)) continue;
     const nAge = time - (u._nanoT === undefined ? -9 : u._nanoT);
     if (nAge >= 0 && nAge < 1.0) {                           // nanite motes stream IN toward the forming plates
       for (let k2 = 0; k2 < 3; k2++) {
@@ -1850,7 +1857,7 @@ function drawSheet(u, sheet, size, hFlip, alpha) {
   const pop = hitAge < 0.22 ? 1 + 0.08 * (1 - hitAge / 0.22) : 1;
   cx.scale(pop, pop);
   const nanoAge = time - (u._nanoT === undefined ? -9 : u._nanoT);
-  if (u.hkey === 'bastille' && nanoAge >= 0 && nanoAge < 1.25) {   // NANITE MORPH — plates flow up from the feet, seam of light at the front
+  if (u.hkey === 'bastille' && !isSkinned(u) && nanoAge >= 0 && nanoAge < 1.25) {   // NANITE MORPH — plates flow up from the feet, seam of light at the front
     const r = Math.pow(clamp(nanoAge / 1.0, 0, 1), 0.8);
     const top = size / 2 - size * r;
     cx.save(); cx.beginPath(); cx.rect(-size / 2, top, size, size * r + 1); cx.clip();
@@ -1911,14 +1918,14 @@ function drawMechPresence(u, sx, sy, size) {
 function drawUnit(u) {
   const sx = (u.x - camX) * ZOOM, sy = (u.y - camY) * ZOOM;
   if (sx < -140 || sy < -140 || sx > VW + 140 || sy > VH + 140) return;
-  const anims = ANIMS[u.key]; if (!anims) return;
+  const anims = ANIMS[skinKey(u)]; if (!anims) return;
   // the attack strip now covers the WINDUP too — the wind-up is the attack, visually
   const state = ((u.atkPhase === 'WINDUP' || time - u.atkT < 0.34) && anims.attack) ? 'attack'
     : (u.moving && anims.walk ? 'walk' : 'idle');
   u._atkAnim = state === 'attack';
   const sheet = anims[state] || anims.idle; if (!sheet) return;
   // bastille v2 (2026-08-21 Grok mech) is tall-normalised by --group; 165 gives the heavy walker its presence
-  let size = u.kind === 'hero' ? (u.hkey === 'sovereign' ? 240 : u.hkey === 'bastille' ? 165 : 120)
+  let size = u.kind === 'hero' ? (isSkinned(u) ? ENEMY_SKIN_SIZE[skinKey(u)] || 130 : u.hkey === 'sovereign' ? 240 : u.hkey === 'bastille' ? 165 : 120)
     : u.kind === 'monster' ? (u.key === 'mawborn_pitbrute' ? 116 : 96) : 84;
   if (u.kind !== 'hero') size = Math.round(size * (u.vScale || 1));
   const hFlip = (Math.cos(u.face) < 0) !== (u.kind !== 'hero' && u.vMirror && !u.moving && time - u.atkT > 0.5);
@@ -1956,7 +1963,7 @@ function drawUnit(u) {
     cx.beginPath(); cx.moveTo(0, 8); cx.lineTo(-7, -4); cx.lineTo(7, -4); cx.closePath(); cx.fill(); cx.stroke();
     cx.restore();
   }
-  if (u.jump && lift > 4) {                                  // THRUSTERS: two flickering jet cones under the airborne mech
+  if (u.jump && lift > 4 && !isSkinned(u)) {                 // THRUSTERS: two flickering jet cones under the airborne mech
     cx.save(); cx.globalCompositeOperation = 'lighter';
     for (const k of [-1, 1]) {
       const jx = sx + k * 13 * ZOOM, jy = sy - lift * ZOOM + size * 0.26 * ZOOM;
@@ -1972,7 +1979,7 @@ function drawUnit(u) {
     cx.restore();
   }
   drawSheet(u, sheet, size, hFlip);
-  if (u.hkey === 'bastille') drawMechPresence(u, sx, sy - lift * ZOOM, size);
+  if (u.hkey === 'bastille' && !isSkinned(u)) drawMechPresence(u, sx, sy - lift * ZOOM, size);
   u.moving = false;   // consumed by the next tick. MUST be reset AFTER drawSheet — clearing it
                       // first meant the procedural stride bob/gait sway never ran at all.
   // shield ring
