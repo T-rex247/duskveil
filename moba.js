@@ -59,7 +59,7 @@ function isSkinned(u) { return skinKey(u) !== u.key; }
 const FX_SHEETS = ['fx_hit_gold', 'fx_hit_cyan', 'fx_hit_ember', 'fx_muzzle_gold', 'fx_muzzle_cyan', 'fx_muzzle_ember',
   'fx_death_dawnmarch', 'fx_death_vectra', 'fx_death_mawborn', 'fx_proj_lightarrow', 'fx_proj_ionbolt_v3',
   'fx_proj_shell_v3', 'fx_proj_emberspit', 'fx_ability_finallight', 'fx_ability_daybreak'];
-const PLATE_FILES = { keep: 'dawnmarch_keep', tower_d: 'dawnmarch_watchtower', spire: 'mawborn_brimstonespire', heart: 'mawborn_pitheart' };
+const PLATE_FILES = { keep: 'dawnmarch_keep', tower_d: 'dawnmarch_watchtower', spire: 'mawborn_brimstonespire', heart: 'mawborn_pitheart', halo: 'halo_station' };
 const TILE_FILES = {
   meadow: 'ground_meadowstone', dirt: 'ground_neutraldirt', cratered: 'ground_cratered',
   crystal_rich: 'crystal_rich_256', crystal_full: 'crystal_full_256', painting: 'mapgen',
@@ -202,7 +202,7 @@ const HEROES = {
       { k: 'Q', name: 'BROADSIDE', icon: '◫', type: 'burst', cd: 5, range: 520, shots: 6, dmg: l => 30 + 12 * l },
       { k: 'W', name: 'AEGIS SCREEN', icon: '⬡', type: 'shield', cd: 5, dur: 3.5, amount: l => 180 + 60 * l },
       { k: 'E', name: 'OVERDRIVE RAM', icon: '⏩', type: 'dash', cd: 5, range: 340, radius: 130, dmg: l => 70 + 26 * l },
-      { k: 'R', name: 'YAMATO LANCE', icon: '☄', type: 'beam', cd: 5, range: 820, width: 120, dmg: l => 300 + 120 * l, ult: true },
+      { k: 'R', name: 'ORBITAL JUDGMENT', icon: '◎', type: 'judgment', cd: 5, range: 900, radius: 420, dmg: l => 520 + 200 * l, ult: true },   // Tee 2026-08-21: cinematic super — calls the HALO station; green converging lances, then a horizon-wiping blast
     ],
   },
   ravener: {
@@ -1014,6 +1014,39 @@ function castAbility(u, i, tx, ty, force) {
         addShake(X, Y, 18); hitstop = Math.max(hitstop, 0.08);
       } });
       ultCeremony(u, ab.pull + 1.2, '150,80,255');
+      break;
+    }
+    case 'judgment': {
+      /* BATTLECRUISER ULT — ORBITAL JUDGMENT (Tee: 'calls on a satellite / bigger ship to send a devastating blow that wipes out all
+       * enemies' — ring-station fly-in + converging green lances + the test-fire blast). Timeline (s from cast):
+       * 0.0 designate (ship anchors, teal designator + reticle)   1.0 HALO station arrives overhead   1.2-2.3 six green lances converge
+       * on the dish, charge glow   2.3 main beam down + MEGABLAST (dmg radius 420)   2.6-4.2 station climbs away. */
+      capTo(ab.range);
+      const X = tx, Y = ty;
+      u.face = ang;
+      u.chan = { kind: 'anchor', t0: time, until: time + 1.0 };
+      u.order = null; u.target = null; u.amove = null; cancelWindup(u);
+      feed(u === player ? 'ORBITAL JUDGMENT — HALO station answering…' : '⚠ ORBITAL STRIKE INBOUND — RUN!');
+      const hostile = !(player && u.team === player.team), rc = hostile ? '255,80,60' : '74,217,224';
+      fxPush({ kind: 'designator', x: u.x, y: u.y, x2: X, y2: Y, life: 1.0, max: 1.0, follow: u, c: rc });
+      fxPush({ kind: 'reticle', x: X, y: Y, life: 2.4, max: 2.4, r: ab.radius, c: rc, lock: 1.0, t0: time });
+      fxPush({ kind: 'station', x: X, y: Y, life: 4.2, max: 4.2, t0: time, c: '90,255,140' });
+      telegraphs.push({ x: X, y: Y, r: ab.radius, at: time + 2.3, team: u.team, c: rc, born: time + 1.0, soft: true, cb: () => {
+        aoeDamage(X, Y, ab.radius, ab.dmg(l), u);
+        for (const tw of towers) if (tw.hp > 0 && tw.team !== u.team && dist({ x: X, y: Y }, tw) < ab.radius) dealDamage(tw, Math.round(ab.dmg(l) * .6), u);
+        fxPush({ kind: 'whiteout', x: X, y: Y, life: .55, max: .55 });
+        fxPush({ kind: 'flash', x: X, y: Y, life: .5, max: .5, r: ab.radius * 1.3 });
+        fxPush({ kind: 'fireball', x: X, y: Y, life: 1.1, max: 1.1, r: ab.radius * 1.15, seed: Math.random() * 9 });
+        fxPush({ kind: 'column', x: X, y: Y, life: 1.0, max: 1.0, r: ab.radius * 0.9, c: '255,200,120' });
+        for (const [rr, lf] of [[1.2, .7], [1.6, .9], [2.1, 1.2]]) fxPush({ kind: 'shock', x: X, y: Y, life: lf, max: lf, r: ab.radius * rr, c: '255,190,110' });
+        fxPush({ kind: 'scorch', x: X, y: Y, life: 9, max: 9, r: ab.radius * 0.95, c: '255,140,60' });
+        fxPush({ kind: 'crack', x: X, y: Y, life: 9, max: 9, r: ab.radius, seed: Math.random() * 9 });
+        fxPush({ kind: 'fire', x: X, y: Y, life: 4, max: 4, r: ab.radius * 0.7, src: u, tickT: 0, seed: Math.random() * 9 });
+        debris(X, Y, 40); smokeBurst(X, Y, ab.radius * 1.2, 16, true);
+        for (const t of units) if (foesOf(u)(t) && Math.hypot(t.x - X, t.y - Y) < ab.radius * 1.3 + t.r) { const a2 = Math.atan2(t.y - Y, t.x - X) || Math.random() * TAU; t.kb = { vx: Math.cos(a2) * 700, vy: Math.sin(a2) * 700, until: time + 0.3 }; }
+        addShake(X, Y, 28); hitstop = Math.max(hitstop, 0.12);
+      } });
+      ultCeremony(u, 4.0, '255,170,80');
       break;
     }
     case 'barrage': {
@@ -2469,6 +2502,52 @@ function drawFxAll(layer) {
       const g = cx.createRadialGradient(x2, y2, 0, x2, y2, 10 * ZOOM);
       g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(' + f.c + ',0)');
       cx.fillStyle = g; cx.beginPath(); cx.arc(x2, y2, 10 * ZOOM, 0, TAU); cx.fill();
+    } else if (f.kind === 'station') {
+      const age = time - f.t0;
+      // descent 0→1.0s (ease-out), hover to 2.6s, climb away 2.6→4.2s
+      const down = Math.min(1, age / 1.0), ed = 1 - Math.pow(1 - down, 3);
+      const up = age > 2.6 ? Math.min(1, (age - 2.6) / 1.6) : 0;
+      const hoverY = sy - 330 * ZOOM, stY = lerp(sy - 1000 * ZOOM, hoverY, ed) - up * up * 900 * ZOOM;
+      const stX = sx + 40 * ZOOM * (1 - ed);
+      const al = age < 0.1 ? age / 0.1 : (up > 0 ? 1 - up : 1);
+      const img = PLATES.halo;
+      const W = (img ? img.naturalWidth : 600) * 0.52 * ZOOM, Hh = (img ? img.naturalHeight : 240) * 0.52 * ZOOM;
+      cx.save(); cx.globalAlpha = al;
+      // engine glow under the hub + soft shadow on the ground below
+      cx.globalCompositeOperation = 'source-over';
+      cx.fillStyle = 'rgba(0,0,0,' + 0.18 * al * (1 - up) + ')'; cx.beginPath(); cx.ellipse(sx, sy, W * 0.32, W * 0.12, 0, 0, TAU); cx.fill();
+      if (img) cx.drawImage(img, stX - W / 2, stY - Hh / 2, W, Hh);
+      else { cx.strokeStyle = 'rgba(140,160,180,0.9)'; cx.lineWidth = 10 * ZOOM; cx.beginPath(); cx.ellipse(stX, stY, W / 2, Hh / 2, 0, 0, TAU); cx.stroke(); }
+      cx.globalCompositeOperation = 'lighter';
+      // charge: six green lances from ring points converge on the dish (1.2 → 2.3s), dish glow builds
+      if (age > 1.15 && age < 2.32) {
+        const ch = clamp((age - 1.15) / 1.1, 0, 1), fl = 0.75 + 0.25 * Math.sin(time * 40);
+        for (let k2 = 0; k2 < 6; k2++) {
+          const aa = k2 / 6 * TAU + 0.3, px = stX + Math.cos(aa) * W * 0.47, py = stY + Math.sin(aa) * Hh * 0.47;
+          cx.strokeStyle = 'rgba(' + f.c + ',' + 0.9 * fl + ')'; cx.lineWidth = (1.5 + 2.5 * ch) * ZOOM;
+          cx.beginPath(); cx.moveTo(px, py); cx.lineTo(stX, stY); cx.stroke();
+          cx.strokeStyle = 'rgba(235,255,240,' + 0.9 * fl + ')'; cx.lineWidth = 0.8 * ZOOM; cx.beginPath(); cx.moveTo(px, py); cx.lineTo(stX, stY); cx.stroke();
+        }
+        const g = cx.createRadialGradient(stX, stY, 0, stX, stY, (18 + 60 * ch) * ZOOM);
+        g.addColorStop(0, 'rgba(255,255,255,' + 0.95 * ch + ')'); g.addColorStop(0.4, 'rgba(' + f.c + ',' + 0.7 * ch + ')'); g.addColorStop(1, 'rgba(' + f.c + ',0)');
+        cx.fillStyle = g; cx.beginPath(); cx.arc(stX, stY, (18 + 60 * ch) * ZOOM, 0, TAU); cx.fill();
+      }
+      // MAIN BEAM down to the target (2.25 → 2.9s)
+      if (age > 2.25 && age < 2.95) {
+        const bp = clamp((age - 2.25) / 0.7, 0, 1), ba = bp < 0.25 ? bp / 0.25 : 1 - (bp - 0.25) / 0.75;
+        cx.lineCap = 'round';
+        cx.globalAlpha = ba * 0.35; cx.strokeStyle = 'rgb(' + f.c + ')'; cx.lineWidth = 90 * ZOOM; cx.beginPath(); cx.moveTo(stX, stY); cx.lineTo(sx, sy); cx.stroke();
+        cx.globalAlpha = ba * 0.8; cx.lineWidth = 34 * ZOOM; cx.beginPath(); cx.moveTo(stX, stY); cx.lineTo(sx, sy); cx.stroke();
+        cx.globalAlpha = ba; cx.strokeStyle = '#f4fff6'; cx.lineWidth = 9 * ZOOM; cx.beginPath(); cx.moveTo(stX, stY); cx.lineTo(sx, sy); cx.stroke();
+        const g2 = cx.createRadialGradient(sx, sy, 0, sx, sy, 160 * ZOOM);
+        g2.addColorStop(0, 'rgba(255,255,255,' + ba + ')'); g2.addColorStop(0.3, 'rgba(' + f.c + ',' + 0.7 * ba + ')'); g2.addColorStop(1, 'rgba(' + f.c + ',0)');
+        cx.fillStyle = g2; cx.beginPath(); cx.arc(sx, sy, 160 * ZOOM, 0, TAU); cx.fill();
+      }
+      cx.restore();
+    } else if (f.kind === 'whiteout') {
+      cx.globalCompositeOperation = 'source-over'; cx.globalAlpha = 1;
+      const p = 1 - a, al = p < 0.15 ? p / 0.15 : 1 - (p - 0.15) / 0.85;
+      cx.fillStyle = 'rgba(255,250,235,' + (0.92 * al) + ')'; cx.fillRect(-20, -20, VW + 40, VH + 40);
     } else if (f.kind === 'comet') {
       const x1 = (f.x1 - camX) * ZOOM, y1 = (f.y1 - camY) * ZOOM, x2 = (f.x2 - camX) * ZOOM, y2 = (f.y2 - camY) * ZOOM;
       const p = 1 - a, hx = lerp(x1, x2, Math.min(1, p * 1.6)), hy = lerp(y1, y2, Math.min(1, p * 1.6));
