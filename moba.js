@@ -200,7 +200,7 @@ const HEROES = {
     hp: 940, hpG: 105, dmg: 58, dmgG: 8, range: 340, cd: 1.1, speed: 132, r: 24,
     abilities: [
       { k: 'Q', name: 'BROADSIDE', icon: '◫', type: 'burst', cd: 5, range: 520, shots: 6, dmg: l => 30 + 12 * l },
-      { k: 'W', name: 'AEGIS SCREEN', icon: '⬡', type: 'shield', cd: 5, dur: 3.5, amount: l => 180 + 60 * l },
+      { k: 'W', name: 'DRONE SWARM', icon: '⬡', type: 'drones', cd: 5, dur: 6.5, count: 10, range: 620, dmg: l => 14 + 5 * l },   // Tee 2026-08-21: 'ten drones deploy from its chambers and swarm the enemy'
       { k: 'E', name: 'OVERDRIVE RAM', icon: '⏩', type: 'dash', cd: 5, range: 340, radius: 130, dmg: l => 70 + 26 * l },
       { k: 'R', name: 'ORBITAL JUDGMENT', icon: '◎', type: 'judgment', cd: 5, range: 900, radius: 420, dmg: l => 520 + 200 * l, ult: true },   // Tee 2026-08-21: cinematic super — calls the HALO station; green converging lances, then a horizon-wiping blast
     ],
@@ -1047,6 +1047,19 @@ function castAbility(u, i, tx, ty, force) {
         addShake(X, Y, 28); hitstop = Math.max(hitstop, 0.12);
       } });
       ultCeremony(u, 4.0, '255,170,80');
+      break;
+    }
+    case 'drones': {
+      /* BATTLECRUISER W — DRONE SWARM: ten attack drones launch from the hull bays one after another, each picks an enemy
+       * (heroes first), orbits/strafes it firing teal bolts, then the swarm flies home and docks when the timer ends. */
+      u.face = ang;
+      const tg0 = units.filter(t => foesOf(u)(t) && dist(u, t) < ab.range).sort((a2, b2) => (a2.kind === 'hero' ? 0 : 1) - (b2.kind === 'hero' ? 0 : 1));
+      for (let k = 0; k < ab.count; k++) {
+        const side = k % 2 ? 1 : -1;
+        fxPush({ kind: 'drone', x: u.x + Math.cos(ang + Math.PI / 2) * side * 40, y: u.y - 26, vx: Math.cos(ang + Math.PI / 2) * side * 120, vy: -160, life: ab.dur + k * 0.15, max: ab.dur + k * 0.15, delay: k * 0.15, src: u, lvl: l, ab, tgt: tg0.length ? tg0[k % tg0.length] : null, orb: (k / ab.count) * TAU, fireT: 0.6 + Math.random() * 0.4, idx: k, home: u });
+      }
+      fxPush({ kind: 'shock', x: u.x, y: u.y - 20, life: .4, max: .4, r: 70, c: '74,217,224' });
+      if (u === player) feed('DRONE SWARM — bays open.');
       break;
     }
     case 'barrage': {
@@ -2502,6 +2515,20 @@ function drawFxAll(layer) {
       const g = cx.createRadialGradient(x2, y2, 0, x2, y2, 10 * ZOOM);
       g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(' + f.c + ',0)');
       cx.fillStyle = g; cx.beginPath(); cx.arc(x2, y2, 10 * ZOOM, 0, TAU); cx.fill();
+    } else if (f.kind === 'drone') {
+      const age = f.max - f.life; if (age < f.delay) { cx.restore(); continue; }
+      const ang = Math.atan2(f.vy || 0, f.vx || 1);
+      cx.globalCompositeOperation = 'source-over'; cx.globalAlpha = 1;
+      cx.fillStyle = 'rgba(0,0,0,0.28)'; cx.beginPath(); cx.ellipse(sx, sy + 30 * ZOOM, 7 * ZOOM, 3 * ZOOM, 0, 0, TAU); cx.fill();   // ground shadow: it flies
+      cx.translate(sx, sy); cx.rotate(ang);
+      const L = 14 * ZOOM, Wd = 9 * ZOOM;
+      cx.fillStyle = '#1d2228'; cx.beginPath(); cx.moveTo(L * 0.6, 0); cx.lineTo(-L * 0.45, -Wd * 0.6); cx.lineTo(-L * 0.25, 0); cx.lineTo(-L * 0.45, Wd * 0.6); cx.closePath(); cx.fill();   // delta wing
+      cx.fillStyle = '#8a939e'; cx.beginPath(); cx.moveTo(L * 0.5, 0); cx.lineTo(-L * 0.3, -Wd * 0.35); cx.lineTo(-L * 0.15, 0); cx.lineTo(-L * 0.3, Wd * 0.35); cx.closePath(); cx.fill();
+      cx.globalCompositeOperation = 'lighter';
+      const g = cx.createRadialGradient(-L * 0.3, 0, 0, -L * 0.3, 0, 9 * ZOOM);
+      g.addColorStop(0, 'rgba(235,255,255,0.95)'); g.addColorStop(0.4, 'rgba(74,217,224,0.7)'); g.addColorStop(1, 'rgba(74,217,224,0)');
+      cx.fillStyle = g; cx.beginPath(); cx.arc(-L * 0.3, 0, 9 * ZOOM, 0, TAU); cx.fill();
+      cx.fillStyle = 'rgba(74,217,224,0.9)'; cx.fillRect(L * 0.2, -1 * ZOOM, 3 * ZOOM, 2 * ZOOM);                    // sensor eye
     } else if (f.kind === 'station') {
       const age = time - f.t0;
       // descent 0→1.0s (ease-out), hover to 2.6s, climb away 2.6→4.2s
@@ -2894,6 +2921,24 @@ function frame(ts) {
           else if (f.smokeT > 0.045) { f.smokeT = 0; fxPush({ kind: 'smoke', x: px, y: py, vx: (Math.random() - .5) * 14, vy: -6, life: 1.3, max: 1.3, r: 7, grow: 26, lite: true }); }
           if (!f.pin && Math.random() < 0.2) fxPush({ kind: 'spk', x: px, y: py, vx: -f.vx * 0.15 + (Math.random() - .5) * 30, vy: -f.vy * 0.15 + (Math.random() - .5) * 30, life: .14, max: .14, c: '255,190,110' });
           if (p >= 1 && !f.landed) { f.landed = true; f.life = 0; if (f.onLand) f.onLand(); }
+        }
+      }
+      else if (f.kind === 'drone') {
+        const age = f.max - f.life;
+        if (age < f.delay) { /* waiting in the bay */ }
+        else {
+          if (!f.out) { f.out = true; fxPush({ kind: 'flash', x: f.x, y: f.y, life: .12, max: .12, r: 14 }); }
+          const ret = f.life < 0.9;                              // last 0.9s: fly home
+          let t = f.tgt; if (t && (t.dead || t.hp <= 0)) { t = f.tgt = null; }
+          if (!t && !ret && f.src && !f.src.dead) { const near = nearestEnemy(f.src, f.ab.range); if (near) f.tgt = t = near; }
+          let gx, gy;
+          if (ret || !t) { const h = f.home; gx = h.x + Math.cos(f.orb + time) * 36; gy = h.y - 30 + Math.sin(f.orb + time) * 14; if (ret && Math.hypot(gx - f.x, gy - f.y) < 18 && f.life < 0.3) f.life = 0; }
+          else { const oa = f.orb + time * 2.4 * (f.idx % 2 ? 1 : -1); gx = t.x + Math.cos(oa) * 78; gy = t.y - 28 + Math.sin(oa) * 34; }
+          const dx = gx - f.x, dy = gy - f.y, d = Math.hypot(dx, dy) || 1, sp = 520;
+          f.vx += ((dx / d) * sp - f.vx) * Math.min(1, dt * 5); f.vy += ((dy / d) * sp - f.vy) * Math.min(1, dt * 5);
+          f.x += f.vx * dt; f.y += f.vy * dt;
+          if (Math.random() < dt * 18) fxPush({ kind: 'spk', x: f.x - f.vx * 0.02, y: f.y - f.vy * 0.02, vx: -f.vx * 0.25, vy: -f.vy * 0.25, life: .18, max: .18, c: '74,217,224', w: 2 });
+          if (t && !ret) { f.fireT -= dt; if (f.fireT <= 0 && Math.hypot(t.x - f.x, t.y - f.y) < 160) { f.fireT = 0.55 + Math.random() * 0.25; const a2 = Math.atan2(t.y - f.y, t.x - f.x); projectiles.push({ x: f.x, y: f.y, ang: a2, sp: 900, left: 200, dmg: f.ab.dmg(f.lvl), team: f.src.team, src: f.src, c: '74,217,224', tracer: true, teal: true }); fxPush({ kind: 'mflash', x: f.x, y: f.y, rot: a2, life: .06, max: .06, c: '110,235,240', r: 9 }); } }
         }
       }
       else if (f.kind === 'blackhole') {
