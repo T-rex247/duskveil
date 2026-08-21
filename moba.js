@@ -202,7 +202,7 @@ const HEROES = {
     desc: 'A VECTRA capital ship answering the front in person. Broadsides, a point-defense screen, an overdrive ram — and a spinal lance that splits the field.',
     hp: 940, hpG: 105, dmg: 58, dmgG: 8, range: 340, cd: 1.1, speed: 132, r: 24,
     abilities: [
-      { k: 'Q', name: 'BROADSIDE', icon: '◫', type: 'burst', cd: 5, range: 520, shots: 6, dmg: l => 30 + 12 * l },
+      { k: 'Q', name: 'OVERDRIVE RAM', icon: '⏩', type: 'dashjet', cd: 5, range: 380, radius: 130, dmg: l => 80 + 26 * l },   // Tee 2026-08-21: 'for BC make Q dash as well' — engine-burn dash (engage/escape), comet streak, rams through the lane
       { k: 'W', name: 'DRONE SWARM', icon: '⬡', type: 'drones', cd: 5, dur: 6.5, count: 10, range: 620, dmg: l => 14 + 5 * l },   // Tee 2026-08-21: 'ten drones deploy from its chambers and swarm the enemy'
       { k: 'E', name: 'DRONE SPHERE', icon: '⬡', type: 'orbdrones', cd: 5, dur: 10, count: 14, radius: 150, amount: l => 320 + 110 * l, dmg: l => 22 + 7 * l },   // Tee 2026-08-21: 'drones swarm in an orb shield 360 around the ship, a ball that slices through anything' (10s)
       { k: 'R', name: 'ORBITAL JUDGMENT', icon: '◎', type: 'judgment', cd: 5, range: 900, radius: 420, dmg: l => 520 + 200 * l, ult: true },   // Tee 2026-08-21: cinematic super — calls the HALO station; green converging lances, then a horizon-wiping blast
@@ -444,7 +444,7 @@ function dealDamage(t, amt, src) {
   if (TRAIN && t.team === 0) return;                      // TRAINING: your side cannot be hurt — only the enemies die
   if (DEMOF && t.plate) return;                    // demo: structures stay pristine
   if (t.hp === undefined || t.dead) return;
-  if (t.sh > 0) { const a = Math.min(t.sh, amt); t.sh -= a; amt -= a; if (t._matrix > time) fxPush({ kind: 'matrixhit', x: t.x, y: t.y, life: .28, max: .28, r: (t.r || 18) + 34, ang: src ? Math.atan2(src.y - t.y, src.x - t.x) : 0 }); }
+  if (t.sh > 0) { const a = Math.min(t.sh, amt); t.sh -= a; amt -= a; if (t._matrix > time) { const sp = fx.find(f => f.kind === 'orbsphere' && f.follow === t); if (sp) { sp.hitT = time; sp.seed = (sp.seed || 1); const ha = src ? Math.atan2(src.y - t.y, src.x - t.x) : 0; fxPush({ kind: 'spk', x: t.x + Math.cos(ha) * sp.r, y: t.y - 14 + Math.sin(ha) * sp.r * 0.8, vx: Math.cos(ha) * 120, vy: Math.sin(ha) * 120, life: .25, max: .25, c: '200,255,255', w: 2.4 }); if (t.sh <= 0) { for (let i2 = 0; i2 < 40; i2++) { const a2 = Math.random() * TAU; fxPush({ kind: 'spk', x: t.x + Math.cos(a2) * sp.r, y: t.y - 14 + Math.sin(a2) * sp.r * 0.8, vx: Math.cos(a2) * (120 + Math.random() * 260), vy: Math.sin(a2) * (120 + Math.random() * 200) - 60, life: .5 + Math.random() * .4, max: .9, c: i2 % 2 ? '74,217,224' : '235,255,255', w: 2.6 }); } fxPush({ kind: 'shock', x: t.x, y: t.y - 14, life: .5, max: .5, r: sp.r * 1.3, c: '150,245,255' }); sp.life = Math.min(sp.life, 0.15); addShake(t.x, t.y, 6); } } else fxPush({ kind: 'matrixhit', x: t.x, y: t.y, life: .28, max: .28, r: (t.r || 18) + 34, ang: src ? Math.atan2(src.y - t.y, src.x - t.x) : 0 }); } }
   t.hp -= amt; t.hitT = time;
   if (t.kind === 'hero' && src && src.kind) { t.lastHitBy = src; t.lastHitAt = time; }
   /* ON-HIT FLINCH + HITSTOP (motion spec §3.2) — the highest-ROI juice in 2D combat.
@@ -2491,11 +2491,25 @@ function drawFxAll(layer) {
       cx.fillStyle = g; cx.beginPath(); cx.arc(sx, sy, rr, 0, TAU); cx.fill();
     } else if (f.kind === 'orbsphere') {
       const fade = Math.min(1, a * 4, (f.max - f.life) * 3), R = f.r * ZOOM, cy0 = sy - 14 * ZOOM, age = time - f.t0;
-      // faint sphere + three tilted orbital rings
-      cx.globalAlpha = fade * 0.9;
-      const g = cx.createRadialGradient(sx, cy0, R * 0.6, sx, cy0, R * 1.05);
-      g.addColorStop(0, 'rgba(74,217,224,0)'); g.addColorStop(0.85, 'rgba(74,217,224,0.12)'); g.addColorStop(1, 'rgba(74,217,224,0)');
+      // SHIELD SHELL (Tee: 'more prevalent, same animation, more badass, crack when hit'): a visible hex-lattice energy bubble whose
+      // integrity = remaining shield; cracks spread across it as it takes damage, it flickers below 30% and shatters when it pops.
+      const u2 = f.follow, integ = u2 && u2.sh > 0 ? clamp(u2.sh / (f.ab.amount(f.lvl)), 0, 1) : 0;
+      const hitAge = time - (f.hitT || -9), flick = integ < 0.3 ? (0.6 + 0.4 * Math.sin(time * 40)) : 1;
+      cx.globalAlpha = fade * flick;
+      const g = cx.createRadialGradient(sx - R * 0.3, cy0 - R * 0.3, R * 0.1, sx, cy0, R * 1.05);
+      g.addColorStop(0, 'rgba(74,217,224,0.06)'); g.addColorStop(0.72, 'rgba(74,217,224,0.16)'); g.addColorStop(0.95, 'rgba(150,245,255,0.55)'); g.addColorStop(1, 'rgba(74,217,224,0)');
       cx.fillStyle = g; cx.beginPath(); cx.ellipse(sx, cy0, R * 1.05, R * 0.9, 0, 0, TAU); cx.fill();
+      cx.save(); cx.beginPath(); cx.ellipse(sx, cy0, R * 1.05, R * 0.9, 0, 0, TAU); cx.clip();
+      cx.strokeStyle = 'rgba(120,240,255,' + (0.28 + 0.12 * Math.sin(time * 3)) + ')'; cx.lineWidth = 1 * ZOOM;
+      const hs = 13 * ZOOM, offy = (time * 14) % (hs * 1.73);
+      for (let row = -R / hs - 1; row < R / hs + 1; row++) for (let col = -R / hs - 1; col < R / hs + 1; col++) { const hx = sx + col * hs * 1.5, hy = cy0 + (row + (col % 2 ? 0.5 : 0)) * hs * 1.73 + offy; cx.beginPath(); for (let k2 = 0; k2 < 6; k2++) { const aa = k2 / 6 * TAU; const px = hx + Math.cos(aa) * hs * 0.55, py = hy + Math.sin(aa) * hs * 0.55; k2 ? cx.lineTo(px, py) : cx.moveTo(px, py); } cx.closePath(); cx.stroke(); }
+      // CRACKS: grow with lost integrity (seeded jagged lines radiating from impact points)
+      const nCr = Math.round((1 - integ) * 10);
+      if (nCr > 0) { cx.strokeStyle = 'rgba(255,255,255,0.85)'; cx.lineWidth = 1.6 * ZOOM; cx.lineCap = 'round';
+        for (let c2 = 0; c2 < nCr; c2++) { const a0 = c2 * 2.39 + (f.seed || 1); let px = sx + Math.cos(a0) * R * 0.7, py = cy0 + Math.sin(a0) * R * 0.6; cx.beginPath(); cx.moveTo(px, py); for (let k2 = 0; k2 < 5; k2++) { const aa = a0 + Math.PI + Math.sin(c2 * 3 + k2 * 2.1) * 0.9; px += Math.cos(aa) * R * 0.16; py += Math.sin(aa) * R * 0.14; cx.lineTo(px, py); } cx.stroke(); } }
+      cx.restore();
+      cx.strokeStyle = 'rgba(210,255,255,' + (0.85 * flick) + ')'; cx.lineWidth = 2.2 * ZOOM; cx.beginPath(); cx.ellipse(sx, cy0, R * 1.05, R * 0.9, 0, 0, TAU); cx.stroke();
+      if (hitAge < 0.3) { const hp2 = 1 - hitAge / 0.3; cx.strokeStyle = 'rgba(255,255,255,' + hp2 + ')'; cx.lineWidth = 5 * hp2 * ZOOM; cx.beginPath(); cx.ellipse(sx, cy0, R * 1.05 * (1 + 0.04 * (1 - hp2)), R * 0.9 * (1 + 0.04 * (1 - hp2)), 0, 0, TAU); cx.stroke(); }
       const rings = [[0.0, 0.45], [1.05, 0.75], [-1.05, 0.75]];
       for (const [rot, sq] of rings) { cx.save(); cx.translate(sx, cy0); cx.rotate(rot); cx.strokeStyle = 'rgba(74,217,224,0.35)'; cx.lineWidth = 1 * ZOOM; cx.setLineDash([4 * ZOOM, 6 * ZOOM]); cx.lineDashOffset = -time * 60; cx.beginPath(); cx.ellipse(0, 0, R, R * sq, 0, 0, TAU); cx.stroke(); cx.restore(); }
       // the drones: n of them spread over the three rings, each ring spinning at its own rate
