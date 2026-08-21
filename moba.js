@@ -9,6 +9,7 @@ const $ = id => document.getElementById(id);
  * locked on the clash. Exists so the graphics review loop grades the same
  * scene every round. */
 const DEMOF = typeof location !== 'undefined' && /[?&]demo=fight/.test(location.search);
+const TRAIN = typeof location !== 'undefined' ? (location.search.match(/[?&]training=([a-z]+)/) || [])[1] || '' : '';   // ?training=<hero>: sandbox where only enemies die
 const NET = { on: false, guest: false, peer: null, conn: null, conns: [], seat: 0, evq: [], snapT: 0, myHk: '', myHid: -1, taken: [], pendingHk: '' };
 let MODE = 'solo', roomCode = '';
 const ICE = { config: { iceServers: [ { urls: 'stun:stun.l.google.com:19302' }, { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' } ] } };
@@ -190,7 +191,7 @@ const HEROES = {
      *  R ORBITAL BARRAGE — anchor-down + laser designator + targeting reticle, then 12 shells rain from orbit; the
      *                      final shell cracks the ground, knocks enemies back and leaves a burning zone that slows. */
     abilities: [
-      { k: 'Q', name: 'GATLING SALVO', icon: '◎', type: 'gatling', cd: 5, range: 620, dur: 1.5, rate: 0.11, spread: 0.12, dmg: l => 22 + 8 * l },
+      { k: 'Q', name: 'THRUSTER DASH', icon: '⏩', type: 'dashjet', cd: 5, range: 340, radius: 95, dmg: l => 70 + 22 * l },   // Tee 2026-08-21: 'make the Q a dash attack and to get away' — jump-jet slide toward the cursor; cuts through enemies on the path, lands with a plasma burst. (GATLING SALVO kept as case 'gatling')
       { k: 'W', name: 'ROCKET SWARM', icon: '♨', type: 'rockets', cd: 5, range: 640, radius: 150, count: 10, dmg: l => 24 + 8 * l },
       { k: 'E', name: 'LASER SWEEP', icon: '⟳', type: 'sweep', cd: 5, dur: 1.6, range: 420, dmg: l => 80 + 26 * l },   // Tee 2026-08-21: '360 laser sweep like Iron Man' — two forearm lasers sweep a full circle, cutting everything they cross
       { k: 'R', name: 'ORBITAL BARRAGE', icon: '☠', type: 'orbital', cd: 5, range: 800, radius: 260, shells: 10, anchor: 1.3, gap: 0.34, dmg: l => 80 + 34 * l, ult: true },
@@ -440,6 +441,7 @@ function effDmg(u) {
 function dealDamage(t, amt, src) {
   if (NET.guest) return;
   if (t.kind === 'hero') amt = Math.round(amt * 0.62);   // heroes take 38% less — fights last longer (Tee 2026-08-19)
+  if (TRAIN && t.team === 0) return;                      // TRAINING: your side cannot be hurt — only the enemies die
   if (DEMOF && t.plate) return;                    // demo: structures stay pristine
   if (t.hp === undefined || t.dead) return;
   if (t.sh > 0) { const a = Math.min(t.sh, amt); t.sh -= a; amt -= a; if (t._matrix > time) fxPush({ kind: 'matrixhit', x: t.x, y: t.y, life: .28, max: .28, r: (t.r || 18) + 34, ang: src ? Math.atan2(src.y - t.y, src.x - t.x) : 0 }); }
@@ -504,7 +506,7 @@ function kill(t, src) {
         else feed(t.hero.name + ' slain by your ally.');
       } else feed('Your ally ' + t.hero.name + ' has fallen.');
       if (srcHero) grantXp(srcHero, 150 + 40 * t.level);
-      t.respT = time + (DEMOF ? 1.5 : 3);   // Tee 2026-08-21: respawn 3s flat
+      t.respT = time + (DEMOF ? 1.5 : TRAIN ? 2.0 : 3);   // Tee 2026-08-21: respawn 3s flat (training: 2s)
       t.recallT = 0;
     } else if (t.kind === 'brood') { /* nothing */ }
   } else if (t.plate) {                                      // a tower
@@ -925,6 +927,33 @@ function castAbility(u, i, tx, ty, force) {
       if (u === player) feed('LASER SWEEP — clear the room.');
       break;
     }
+    case 'dashjet': {
+      // THRUSTER DASH: a low, fast jump-jet slide toward the cursor (engage or escape). Enemies along the lane take damage and
+      // get shoved aside; the landing pops a teal plasma burst. Uses the vault flight machinery with a flat, quick arc.
+      capTo(ab.range);
+      const X = tx, Y = ty;
+      u.jump = { x0: u.x, y0: u.y, x1: X, y1: Y, t0: time, dur: 0.26, h: 26, ab: { radius: ab.radius, dmg: ab.dmg }, lvl: l, dash: true };
+      u.order = null; u.target = null; u.amove = null; u.face = ang; cancelWindup(u); u.chan = null;
+      u._thrustT = time + 0.9;
+      fxPush({ kind: 'flash', x: u.x, y: u.y + 6, life: .12, max: .12, r: 26 });
+      fxPush({ kind: 'dust', x: u.x, y: u.y, life: .45, max: .45, r: 40 });
+      fxPush({ kind: 'comet', x1: u.x, y1: u.y - 16, x2: X, y2: Y - 16, life: .4, max: .4 });
+      for (let g2 = 1; g2 <= 3; g2++) fxPush({ kind: 'ghost', key: skinKey(u), x: lerp(u.x, X, g2 / 4), y: lerp(u.y, Y, g2 / 4), face: ang, life: .28, max: .28, size: 165 });
+      // enemies on the lane are cut as he passes
+      for (const t of units) {
+        if (!foesOf(u)(t)) continue;
+        const dx = t.x - u.x, dy = t.y - u.y, L = Math.hypot(X - u.x, Y - u.y) || 1, px = (X - u.x) / L, py = (Y - u.y) / L;
+        const proj = dx * px + dy * py; if (proj < 0 || proj > L + t.r) continue;
+        const off = Math.abs(-dx * py + dy * px); if (off > 70 + t.r) continue;
+        dealDamage(t, Math.round(ab.dmg(l) * 0.6), u); onAbilityHit(u, t);
+        const side = (-dx * py + dy * px) >= 0 ? 1 : -1;
+        t.kb = { vx: -py * side * 360 + px * 120, vy: px * side * 360 + py * 120, until: time + 0.16 };
+        sparks(t.x, t.y - 8, ang, '74,217,224', 1.2);
+      }
+      addShake(u.x, u.y, 3);
+      if (u === player) feed('THRUSTER DASH.');
+      break;
+    }
     case 'orbital': {
       capTo(ab.range);
       const X = tx, Y = ty;
@@ -1277,9 +1306,8 @@ function tickBastille(dt) {
         fxPush({ kind: 'shock', x: j.x1, y: j.y1, life: .32, max: .32, r: ab.radius * 0.7, c: '255,190,120' });
         fxPush({ kind: 'fireball', x: j.x1, y: j.y1 + 6, life: .3, max: .3, r: 46, seed: Math.random() * 9 });
         fxPush({ kind: 'dust', x: j.x1, y: j.y1, life: .7, max: .7, r: ab.radius * 1.1 });
-        fxPush({ kind: 'crack', x: j.x1, y: j.y1, life: 4, max: 4, r: 70, seed: Math.random() * 9 });
+        if (!j.dash) { fxPush({ kind: 'crack', x: j.x1, y: j.y1, life: 4, max: 4, r: 70, seed: Math.random() * 9 }); debris(j.x1, j.y1, 8); }
         fxPush({ kind: 'scorch', x: j.x1, y: j.y1, life: 2.5, max: 2.5, r: 40, c: '159,232,255' });
-        debris(j.x1, j.y1, 8);
         sheetFx('fx_hit_cyan', { x: j.x1, y: j.y1, size: 150 });
         addShake(j.x1, j.y1, 8);
         hitstop = Math.max(hitstop, 0.04);
@@ -1527,7 +1555,7 @@ function heroesThink(dt) {
     if (h.dead && time >= h.respT) {
       h.dead = false; h.hp = h.maxHp;
       const c = coreOf(h.team);
-      if (DEMOF) { h.x = ALTAR.x + (h.team === 0 ? -1 : 1) * (250 + Math.random() * 80); h.y = ALTAR.y + (Math.random() - .5) * 260; }
+      if (DEMOF || TRAIN) { h.x = ALTAR.x + (h.team === 0 ? -1 : 1) * (250 + Math.random() * 80); h.y = ALTAR.y + (Math.random() - .5) * 260; }
       else { h.x = c.x + (h.team === 0 ? 90 : -90); h.y = c.y + (Math.random() - .5) * 80; }
       h.order = null; h.target = null;
       if (h.hkey === 'bastille') h._nanoT = time;
@@ -1548,6 +1576,7 @@ function heroesThink(dt) {
     if ((e === player && !DEMOF) || e.dead) continue;   // demo drives the player too
     if (e === player && window.DV_QA && DV_QA.noAI) continue;   // QA hook: captures drive the player themselves
     if (window.DV_QA && DV_QA.noAllAI) continue;                 // QA/cinematic hook: nobody casts unless the script says so
+    if (TRAIN) { if (e.team === 1 && !e.dead && player && !player.dead) { if (dist(e, player) > 240) e.order = { x: player.x + (Math.random() - .5) * 160, y: player.y + (Math.random() - .5) * 120 }; else { e.target = player; e.order = null; } } continue; }   // TRAINING: enemies close in and swing, never cast, never hurt
     if (e.human && e !== player) continue;               // a guest commands this hero
     if (time < (e.aiT || 0)) continue;
     e.aiT = time + 0.5;
@@ -3100,7 +3129,7 @@ function frame(ts) {
         if (foe) castAbility(pickc.h, pickc.i, foe.x, foe.y);
       }
     }
-    if (waveT <= 0) { waveT = 30; spawnWave(); }
+    if (waveT <= 0) { waveT = 30; if (!TRAIN) spawnWave(); }
     for (const c of JUNGLE) if (!c.alive && time > c.respawnAt) spawnCamp(c);
     for (const u of units) stepUnit(u, dt);
     separation();
@@ -3232,6 +3261,7 @@ function frame(ts) {
     for (let i = sheetFxList.length - 1; i >= 0; i--) if ((time - sheetFxList[i].t0) / sheetFxList[i].dur >= 1) sheetFxList.splice(i, 1);
     for (let i = beams.length - 1; i >= 0; i--) if (time - beams[i].t0 > beams[i].dur) beams.splice(i, 1);
     units = units.filter(u => !u.dead || u.kind === 'hero');
+    if (TRAIN && time - (frame._trT || 0) > 3) { frame._trT = time; const n = units.filter(u => !u.dead && u.kind === 'minion' && u.team === 1).length; for (let i = n; i < 5; i++) { const d = MINIONS[1][i % 2]; const u = mkUnit(1, d.key, ALTAR.x + 320 + Math.random() * 160, ALTAR.y - 150 + Math.random() * 300, d); u.order = null; units.push(u); } }
     // camera follows player
     const camF = DEMOF ? ALTAR : (player || ALTAR);
     const tx = clamp((DEMOF ? ALTAR.x : camF.x) - VW / ZOOM / 2, 0, WORLD.w - VW / ZOOM);
@@ -3373,13 +3403,14 @@ function startGame(hk) {
   // demo: put the WHOLE roster on the field (2 allies + the other 3 as enemies) so a
   // capture shows every champion's sprite at once instead of the same three every time
   if (DEMOF) allies = all.filter(k => k !== hk).slice(0, 2);
+  if (TRAIN) allies = [];
   allies.forEach((k, i) => {
     const h = mkHero(0, k, 380, MID_Y + 90 + i * 60);
     h.lane = i === 0 ? 1 : 2;                      // ally 1 bot lane, ally 2 jungles
     heroes.push(h);
   });
   // enemy team never mirrors the PLAYER'S legend (Tee 2026-08-21: no second Goliath when you play Goliath)
-  const epool = DEMOF ? all.filter(k => k !== hk && !allies.includes(k)) : all.filter(k => k !== hk).sort(() => Math.random() - .5).slice(0, 3);
+  const epool = TRAIN ? ['corwen', 'liora', 'ravener'].filter(k => k !== hk).slice(0, 3) : DEMOF ? all.filter(k => k !== hk && !allies.includes(k)) : all.filter(k => k !== hk).sort(() => Math.random() - .5).slice(0, 3);
   epool.forEach((k, i) => {
     const h = mkHero(1, k, WORLD.w - 380, MID_Y + (i - 1) * 80);
     h.lane = i;                                     // top / bot / jungle
@@ -3389,6 +3420,13 @@ function startGame(hk) {
     h.level = 6;                     // ARAM rules: the whole kit is live from minute one
     heroStat(h); h.hp = h.maxHp; units.push(h);
     if (h.hkey === 'bastille') h._nanoT = 0.3;   // GOLIATH materialises (nanite morph) on match start
+  }
+  if (TRAIN) {
+    player.x = ALTAR.x - 260; player.y = ALTAR.y + 20; player.order = null;
+    heroes.forEach((h, i) => { if (h.team === 1) { h.x = ALTAR.x + 220 + (i % 3) * 70; h.y = ALTAR.y - 120 + (i % 3) * 120; h.order = null; } });
+    for (let i = 0; i < 5; i++) { const d = MINIONS[1][i % 2]; const u = mkUnit(1, d.key, ALTAR.x + 300 + Math.random() * 160, ALTAR.y - 150 + i * 75, d); u.order = null; units.push(u); }
+    ALTAR.lockT = 9e9;
+    feed('TRAINING GROUND — you cannot be hurt. Q W E R on the dummies; they respawn.');
   }
   if (DEMOF) {
     // everyone level 6 (ults online), arrayed in two arcs around the altar
@@ -3427,7 +3465,8 @@ function startGame(hk) {
   $('load').classList.add('hidden');
   const hp = $('heroes');
   for (const hk of Object.keys(HEROES)) hp.appendChild(heroCard(hk));
-  if (DEMOF) {                              // ?hero=<key> picks who the demo plays (QA hook)
+  if (TRAIN && HEROES[TRAIN]) startGame(TRAIN);
+  else if (DEMOF) {                              // ?hero=<key> picks who the demo plays (QA hook)
     const hp = (location.search.match(/[?&]hero=([a-z]+)/) || [])[1];
     startGame(HEROES[hp] ? hp : 'liora');
   }

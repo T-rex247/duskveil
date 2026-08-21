@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PROJECT VALOR — HUSSL PRODUCTION</title>
+<meta name="description" content="PROJECT VALOR — a hero-command battle arena in the HALCYON universe. Watch the cinematic, read the lore, meet the legends, and train every ability in the sandbox.">
+<meta property="og:title" content="PROJECT VALOR"><meta property="og:description" content="A HALCYON universe battle arena. Play free."><meta property="og:image" content="https://duskveil.vercel.app/assets/portraits/bastille.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Cinzel:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root{--gold:#ffb347;--gold2:#ffd98a;--teal:#4ad9e0;--ink:#e8edf5;--dim:#8a94a6;--line:#232c3b;--bg:#07090d}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{background:var(--bg);color:var(--ink);font-family:'Rajdhani',system-ui,sans-serif;overflow-x:hidden}
+  img,video,iframe{max-width:100%;display:block}
+  h1,h2,h3{font-family:'Cinzel',serif;font-weight:900;letter-spacing:.08em}
+  .wrap{max-width:1240px;margin:0 auto;padding:0 24px}
+  /* HERO — the cinematic rolls immediately */
+  #hero{position:relative;height:100svh;min-height:560px;overflow:hidden;background:#000}
+  #hero video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .8s}
+  #hero video.on{opacity:1}
+  #hero .veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,9,13,.15) 0%,rgba(7,9,13,0) 35%,rgba(7,9,13,.55) 75%,var(--bg) 100%)}
+  #hero .hud{position:absolute;left:0;right:0;bottom:8vh;text-align:center;padding:0 20px}
+  #hero .kicker{letter-spacing:.4em;color:var(--gold2);font-size:12px;font-weight:700}
+  #hero h1{font-size:clamp(40px,7vw,96px);color:#fff;text-shadow:0 0 60px rgba(255,179,71,.45);margin:8px 0 10px;line-height:1}
+  #hero p{color:#cdd6e4;font-size:clamp(15px,1.6vw,20px);letter-spacing:.08em;max-width:720px;margin:0 auto 22px}
+  .btn{display:inline-flex;align-items:center;gap:10px;padding:14px 30px;border-radius:8px;font-weight:700;letter-spacing:.16em;font-size:14px;text-decoration:none;transition:transform .12s,box-shadow .12s;cursor:pointer;border:1px solid transparent}
+  .btn.gold{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#201502;box-shadow:0 0 28px rgba(255,179,71,.35)}
+  .btn.ghost{border-color:#4a3d22;color:var(--gold2);background:rgba(13,17,24,.6)}
+  .btn:hover{transform:translateY(-2px)}
+  #sound{position:absolute;right:18px;top:18px;z-index:3;background:rgba(8,11,16,.7);border:1px solid #4a3d22;color:var(--gold2);border-radius:999px;padding:8px 14px;font-weight:700;letter-spacing:.12em;font-size:12px;cursor:pointer}
+  /* sections */
+  section{padding:84px 0}
+  .eyebrow{letter-spacing:.36em;color:var(--gold2);font-size:12px;font-weight:700;margin-bottom:10px}
+  h2{font-size:clamp(26px,3.6vw,44px);color:#fff;margin-bottom:18px}
+  .lead{color:#b9c2d0;font-size:18px;line-height:1.6;max-width:820px}
+  /* lore */
+  #lore{background:radial-gradient(120% 80% at 50% 0%,rgba(74,217,224,.08),transparent 60%)}
+  .lore{display:grid;grid-template-columns:1.2fr .8fr;gap:40px;align-items:start}
+  .lore p{color:#c3ccda;font-size:17px;line-height:1.7;margin-bottom:16px}
+  .lore p b{color:var(--gold2)}
+  .factions{display:grid;gap:12px}
+  .fac{border:1px solid var(--line);border-radius:12px;padding:16px 18px;background:rgba(13,17,24,.8)}
+  .fac h3{font-size:15px;letter-spacing:.2em;margin-bottom:6px}
+  .fac p{font-size:14px;color:#aab4c4;margin:0;line-height:1.5}
+  .fac.dawn h3{color:#ffe9a8}.fac.vec h3{color:var(--teal)}.fac.maw h3{color:#ff9c8a}.fac.tit h3{color:#c6a6ff}
+  /* legends */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}
+  .card{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:rgba(13,17,24,.9);transition:transform .15s,border-color .15s}
+  .card:hover{transform:translateY(-4px);border-color:var(--gold)}
+  .card .pic{aspect-ratio:3/4;background-size:cover;background-position:center 18%;position:relative}
+  .card .pic::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(13,17,24,.95))}
+  .card .nm{position:absolute;left:16px;bottom:12px;z-index:1}
+  .card .nm h3{font-size:22px;color:#fff}
+  .card .nm span{font-size:11px;letter-spacing:.24em;color:var(--gold2)}
+  .card .kit{padding:14px 16px 18px}
+  .card .kit div{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start;padding:7px 0;border-top:1px solid #161c27}
+  .card .kit div:first-child{border-top:0}
+  .card .kit b{color:var(--gold2);font-family:'Cinzel',serif}
+  .card .kit strong{color:#fff;font-size:14px;letter-spacing:.06em;display:block}
+  .card .kit small{color:#9aa6b8;font-size:13px;line-height:1.45}
+  .card.enemy .pic{background-position:center}
+  /* training */
+  #train{background:linear-gradient(180deg,transparent,rgba(74,217,224,.05) 30%,transparent)}
+  .picker{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}
+  .picker button{border:1px solid var(--line);background:#0d1119;color:var(--ink);padding:10px 16px;border-radius:8px;font-family:inherit;font-weight:700;letter-spacing:.14em;font-size:12px;cursor:pointer}
+  .picker button.on,.picker button:hover{border-color:var(--gold);color:var(--gold2)}
+  .frame{position:relative;border:1px solid #4a3d22;border-radius:14px;overflow:hidden;background:#000;box-shadow:0 0 0 1px #000,0 20px 60px #000c;aspect-ratio:16/9}
+  .frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+  .keys{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:14px;color:var(--dim);font-size:13px;letter-spacing:.08em}
+  .keys b{color:var(--gold2);font-family:'Cinzel',serif;margin-right:6px}
+  footer{padding:40px 0 60px;text-align:center;color:var(--dim);font-size:12px;letter-spacing:.2em}
+  footer a{color:var(--gold2);text-decoration:none}
+  @media (max-width:860px){.lore{grid-template-columns:1fr}section{padding:56px 0}.frame{aspect-ratio:4/3}}
+</style>
+</head>
+<body>
+<section id="hero">
+  <video id="cine" autoplay muted loop playsinline preload="auto" poster="assets/portraits/bastille.jpg"></video>
+  <div class="veil"></div>
+  <button id="sound">🔇 SOUND OFF</button>
+  <div class="hud">
+    <div class="kicker">HUSSL PRODUCTION · ORIGINAL GAMES</div>
+    <h1>PROJECT VALOR</h1>
+    <p>A hero-command battle arena in the HALCYON universe. Six legends. Three factions. One altar. Play free in your browser.</p>
+    <a class="btn gold" href="https://duskveil.vercel.app/?from=valor">▶ PLAY NOW</a>
+    <a class="btn ghost" href="#train" style="margin-left:10px">TRAINING GROUND</a>
+  </div>
+</section>
+
+<section id="lore"><div class="wrap">
+  <div class="eyebrow">THE LORE</div>
+  <h2>When the Veil tore, the world learned what it was made of.</h2>
+  <div class="lore">
+    <div>
+      <p>The HALCYON worlds were built on <b>crystal</b> — the living lattice that lights their cities, powers their fleets and remembers their dead. For an age the crystal slept in the deep and the nations above it only argued about who it belonged to.</p>
+      <p>Then the <b>Veil</b> tore. A rift opened at the heart of the old altar plain and the <b>Mawborn</b> came through it: a pit-horde of black chitin and ember, ripper packs and brood-wyrms, led by things that used to be people. Where they walk, the crystal goes dark.</p>
+      <p>The <b>Dawnmarch</b> answered first — knights and storm-priests who believe the crystal is holy and the rift is a wound to be closed. <b>VECTRA</b> answered second, and louder: a machine fleet that sees the crystal as fuel and the war as an engineering problem — nanite walkers, sky-dreadnoughts, an orbital ring that can erase a valley.</p>
+      <p>And now something has stepped through the Veil that belongs to neither side. A <b>Titan</b> who wears the rings of a dead order and fights for reasons of his own. The altar is the only place where all of them meet — whoever holds it holds the crystal's voice. Three against three. Hold the circle, or burn.</p>
+    </div>
+    <div class="factions">
+      <div class="fac dawn"><h3>DAWNMARCH</h3><p>Order of light. Paladins and storm-elders; shields, sunbursts, a beam that ends arguments. They hold the line and they keep their word.</p></div>
+      <div class="fac vec"><h3>VECTRA</h3><p>Machine fleet. Goliath walkers, the Battlecruiser, the Halo station. Precision, heat, and the patience to target from orbit.</p></div>
+      <div class="fac maw"><h3>MAWBORN</h3><p>The pit-horde. Rippers, brood-wyrms, brutes, and the Swarm Queen who calls brimstone down from the dark. Every enemy you face wears their skin.</p></div>
+      <div class="fac tit"><h3>THE TITAN</h3><p>Korvax. Neither side. Violet lightning, rune-rings, ring portals — and a singularity that swallows the fight whole.</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section id="legends"><div class="wrap">
+  <div class="eyebrow">THE LEGENDS</div>
+  <h2>Six kits. Every ability reads before it lands.</h2>
+  <p class="lead">Every legend starts at level 6 with the whole kit live. Five-second cooldowns. Three-second respawns. Your own legend is harder to kill.</p>
+  <div class="grid" style="margin-top:26px">
+    <div class="card"><div class="pic" style="background-image:url(assets/portraits/bastille.jpg)"><div class="nm"><span>VECTRA · WALKER ACE</span><h3>GOLIATH</h3></div></div>
+      <div class="kit"><div><b>Q</b><div><strong>GATLING SALVO</strong><small>Barrel spin-up, then a rooted cone of HALCYON-teal plasma rounds. Move to cancel.</small></div></div><div><b>W</b><div><strong>PIN MISSILES</strong><small>Ten silver homing darts fan out of the shoulder pods and dive onto targets.</small></div></div><div><b>E</b><div><strong>LASER SWEEP</strong><small>Twin forearm lasers rotate a full 360 — everything they cross is cut and shoved.</small></div></div><div><b>R</b><div><strong>ORBITAL BARRAGE</strong><small>Anchor, designate, lock — then shells ride targeting lasers down from orbit; the last one leaves burning ground.</small></div></div></div></div>
+    <div class="card"><div class="pic" style="background-image:url(assets/portraits/sovereign.jpg)"><div class="nm"><span>VECTRA · SKY DREADNOUGHT</span><h3>BATTLECRUISER</h3></div></div>
+      <div class="kit"><div><b>Q</b><div><strong>BROADSIDE</strong><small>Six-shot volley from the hull turrets.</small></div></div><div><b>W</b><div><strong>DRONE SWARM</strong><small>Ten drones launch from the bays, pick targets and strafe with teal bolts.</small></div></div><div><b>E</b><div><strong>DRONE SPHERE</strong><small>Fourteen drones lock into three spinning rings — a shield that slices whatever touches it.</small></div></div><div><b>R</b><div><strong>ORBITAL JUDGMENT</strong><small>The Halo station drops in overhead, six green lances converge, and the valley goes white.</small></div></div></div></div>
+    <div class="card"><div class="pic" style="background-image:url(assets/portraits/korvax.jpg)"><div class="nm"><span>THE TITAN · WARLORD</span><h3>KORVAX</h3></div></div>
+      <div class="kit"><div><b>Q</b><div><strong>POWER BLAST</strong><small>A charged fist releases a jagged violet lightning bolt that cracks the ground.</small></div></div><div><b>W</b><div><strong>RUNE RINGS</strong><small>Two orange mandalas orbit and lash; the first hero hit is bound in golden cords.</small></div></div><div><b>E</b><div><strong>RING PORTAL</strong><small>A sparking ring opens here and there — he steps through.</small></div></div><div><b>R</b><div><strong>SINGULARITY</strong><small>A black hole drags everyone in, then detonates into teal shards.</small></div></div></div></div>
+    <div class="card"><div class="pic" style="background-image:url(assets/portraits/liora.jpg)"><div class="nm"><span>DAWNMARCH · STORM ELDER</span><h3>LIORA</h3></div></div>
+      <div class="kit"><div><b>Q</b><div><strong>LIGHTBOLT</strong><small>Daylight skillshot; it brands what it hits.</small></div></div><div><b>W</b><div><strong>SUNBURST</strong><small>Delayed burst of storm-light on the ground.</small></div></div><div><b>E</b><div><strong>AEGIS</strong><small>A shield of dawn.</small></div></div><div><b>R</b><div><strong>FINAL LIGHT</strong><small>One beam that ends arguments — and detonates every brand on screen.</small></div></div></div></div>
+    <div class="card"><div class="pic" style="background-image:url(assets/portraits/corwen.jpg)"><div class="nm"><span>DAWNMARCH · BLADE LORD</span><h3>CORWEN</h3></div></div>
+      <div class="kit"><div><b>Q</b><div><strong>CLEAVE</strong><small>A wide golden arc.</small></div></div><div><b>W</b><div><strong>CHARGE</strong><small>Crash into the backline.</small></div></div><div><b>E</b><div><strong>RALLY</strong><small>Shield + haste; his bulwark recharges out of combat.</small></div></div><div><b>R</b><div><strong>DAYBREAK</strong><small>The whole field turns gold — and executes the weak.</small></div></div></div></div>
+    <div class="card"><div class="pic" style="background-image:url(assets/portraits/ravener.jpg)"><div class="nm"><span>MAWBORN · SWARM QUEEN</span><h3>RAVENER</h3></div></div>
+      <div class="kit"><div><b>Q</b><div><strong>ACID SPIT</strong><small>Sigil a target, recast to lunge to it.</small></div></div><div><b>W</b><div><strong>BROOD</strong><small>Claw up three broodlings through red chaos tendrils.</small></div></div><div><b>E</b><div><strong>LUNGE</strong><small>A killing dash.</small></div></div><div><b>R</b><div><strong>ORBITAL BRIMSTONE</strong><small>Three blue sky-lances, then the meteor.</small></div></div></div></div>
+  </div>
+</div></section>
+
+<section id="train"><div class="wrap">
+  <div class="eyebrow">TRAINING GROUND</div>
+  <h2>Every ability, live. Only the enemies die.</h2>
+  <p class="lead">A sandbox at the altar: you can't be hurt, the dummies respawn, and the whole kit is live. Right-click / tap to move, <b>Q W E R</b> to cast, <b>A</b> attack-move, <b>S</b> stop.</p>
+  <div class="picker" id="picker">
+    <button data-h="bastille" class="on">GOLIATH</button><button data-h="sovereign">BATTLECRUISER</button><button data-h="korvax">KORVAX</button><button data-h="liora">LIORA</button><button data-h="corwen">CORWEN</button><button data-h="ravener">RAVENER</button>
+  </div>
+  <div class="frame"><iframe id="sandbox" src="https://duskveil.vercel.app/?training=bastille&from=valor" allow="autoplay; fullscreen" title="PROJECT VALOR training ground"></iframe></div>
+  <div class="keys"><span><b>Q</b>ability 1</span><span><b>W</b>ability 2</span><span><b>E</b>ability 3</span><span><b>R</b>ultimate</span><span><b>A</b>attack-move</span><span><b>S</b>stop</span><span><b>H</b>hold</span></div>
+  <p style="margin-top:16px"><a class="btn gold" href="https://duskveil.vercel.app/?from=valor">▶ PLAY THE REAL THING</a></p>
+</div></section>
+
+<footer><a href="https://husslai.com/game">HUSSL PRODUCTION · ORIGINAL GAMES</a> &nbsp;·&nbsp; PROJECT VALOR · A HALCYON UNIVERSE BATTLE ARENA</footer>
+
+<script>
+  // cinematic rolls right away (muted autoplay), sound on a click
+  const v = document.getElementById('cine'), sb = document.getElementById('sound');
+  v.src = 'https://hussl-production.vercel.app/assets/valor_trailer.mp4';
+  v.addEventListener('loadeddata', () => { v.classList.add('on'); v.play().catch(() => {}); });
+  v.play().catch(() => {});
+  let on = false;
+  sb.addEventListener('click', () => { on = !on; v.muted = !on; sb.textContent = on ? '🔊 SOUND ON' : '🔇 SOUND OFF'; if (on) v.play().catch(() => {}); });
+  // training picker
+  const fr = document.getElementById('sandbox');
+  document.querySelectorAll('#picker button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('#picker button').forEach(x => x.classList.remove('on')); b.classList.add('on');
+    fr.src = 'https://duskveil.vercel.app/?training=' + b.dataset.h + '&from=valor';
+  }));
+</script>
+</body>
+</html>

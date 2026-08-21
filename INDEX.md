@@ -6,6 +6,9 @@ Code now PUBLIC at github.com/T-rex247/duskveil under **AGPL-3.0** (Tee accepted
 
 # duskveil — INDEX
 
+## TRAINING MODE + /projectvalor page — 2026-08-21 (Tee)
+`?training=<hkey>` = sandbox at the altar (TRAIN flag): your team can't be hurt (dealDamage returns for team 0), no allies, 3 enemy legend dummies + 5 pit minions that close in and auto but never cast, fast respawn, no waves, pick screen skipped. `projectvalor.html` (repo root, clean URL `/projectvalor` via `vercel.json cleanUrls`) = cinematic hero (valor_trailer autoplay muted + sound button), ORIGINAL lore, 6 legend cards w/ kits, training iframe w/ legend picker → mounted at husslai.com/projectvalor via husslai vercel.json rewrite. **GOLIATH Q = THRUSTER DASH** (`case 'dashjet'`: 0.26s low jump-jet slide 340px, cuts enemies on the lane, teal landing burst; gatling kept as `case 'gatling'`).
+
 **RENAMED 2026-08-21 (Tee): PROJECT DUSKVEIL → PROJECT VALOR** (display/title/HUD only; repo, hkeys, asset paths and duskveil.vercel.app unchanged). Listed FIRST on the hub.
 
 ## DIRECTIONAL (360) SHEETS — 2026-08-21 — now GOLIATH, KORVAX, LIORA, CORWEN, RAVENER, BATTLECRUISER (stern/bow, 384 cells, `DIR_SCALE` evens out the per-group shared scale)
