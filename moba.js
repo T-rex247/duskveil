@@ -91,7 +91,7 @@ async function loadAll() {
       })());
       // DIRECTIONAL sheets (Tee 2026-08-21: "when I move up his body turns, I can see his back — total 360"):
       // optional `${u}_n_${a}` (back view) and `${u}_s_${a}` (front view). Side view = the base sheet (flipped for west).
-      for (const d of ['n', 's']) jobs.push((async () => {
+      for (const d of ['n', 's', 'ne', 'se']) jobs.push((async () => {   // 8-way: diagonals optional (Tee 2026-08-21 'Brood War Goliath 360 movement')
         try {
           const r = await fetch(`assets/anim/${u}_${d}_${a}.atlas.json`); if (!r.ok) return;
           const meta = await r.json(); const img = await loadImg(`assets/anim/${u}_${d}_${a}.png`);
@@ -2259,18 +2259,29 @@ function drawUnit(u) {
   const state = ((u.atkPhase === 'WINDUP' || time - u.atkT < 0.34) && anims.attack) ? 'attack'
     : (u.moving && anims.walk ? 'walk' : 'idle');
   u._atkAnim = state === 'attack';
-  // facing → view: back when walking UP the map, front when walking DOWN, side otherwise (west = mirrored side)
-  const sn = Math.sin(u.vFace === undefined ? u.face : u.vFace);
-  const dir = sn < -0.62 && anims['n_idle'] ? 'n' : sn > 0.62 && anims['s_idle'] ? 's' : 'e';
+  // facing → view. 8-WAY when diagonal sheets exist (ne/se + mirrors), else 4-way (n/s + mirrored side), else side-only.
+  // Sectors are 45° wide with a little hysteresis so the heading doesn't chatter at the boundaries.
+  const vf = u.vFace === undefined ? u.face : u.vFace;
+  let deg = ((vf * 180 / Math.PI) % 360 + 360) % 360;            // 0 = east, 90 = south (down the screen), 270 = north
+  let dir = 'e', mirror = false;
+  if (anims['ne_idle'] && anims['se_idle']) {
+    const sec = Math.round(deg / 45) % 8;                            // 0 E,1 SE,2 S,3 SW,4 W,5 NW,6 N,7 NE
+    if (u._sec !== undefined && u._sec !== sec) { const d0 = Math.abs(((deg - u._sec * 45) % 360 + 540) % 360 - 180); if (d0 < 27) { /* inside hysteresis: keep old sector */ } else u._sec = sec; } else u._sec = sec;
+    const S2 = u._sec; dir = ['e', 'se', 's', 'se', 'e', 'ne', 'n', 'ne'][S2]; mirror = S2 === 3 || S2 === 4 || S2 === 5;
+    if (!anims[dir + '_idle'] && dir !== 'e') dir = 'e';
+  } else {
+    const sn = Math.sin(vf);
+    dir = sn < -0.62 && anims['n_idle'] ? 'n' : sn > 0.62 && anims['s_idle'] ? 's' : 'e'; mirror = dir === 'e' && Math.cos(vf) < 0;
+  }
   const sheet = (dir === 'e' ? anims[state] : (anims[dir + '_' + state] || anims[dir + '_idle'])) || anims[state] || anims.idle; if (!sheet) return;
-  u._dir = dir;
+  u._dir = dir; u._mirror = mirror;
   const DIR_SCALE = { vectra_sovereign: { n: 0.68, s: 0.89 } };   // stern/bow groups key in at a different shared scale than the side group
   // bastille v2 (2026-08-21 Grok mech) is tall-normalised by --group; 165 gives the heavy walker its presence
   let size = u.kind === 'hero' ? (isSkinned(u) ? ENEMY_SKIN_SIZE[skinKey(u)] || 130 : u.hkey === 'sovereign' ? 240 : u.hkey === 'bastille' ? 165 : u.hkey === 'korvax' ? 165 : 120)
     : u.kind === 'monster' ? (u.key === 'mawborn_pitbrute' ? 116 : 96) : 84;
   if (u.kind !== 'hero') size = Math.round(size * (u.vScale || 1));
   if (dir !== 'e' && DIR_SCALE[skinKey(u)] && DIR_SCALE[skinKey(u)][dir]) size = Math.round(size * DIR_SCALE[skinKey(u)][dir]);
-  const hFlip = u._dir && u._dir !== 'e' ? false : (Math.cos(u.face) < 0) !== (u.kind !== 'hero' && u.vMirror && !u.moving && time - u.atkT > 0.5);
+  const hFlip = (u._dir && u._dir !== 'e') ? !!u._mirror : (u._mirror !== undefined && anims['ne_idle'] ? !!u._mirror : (Math.cos(u.face) < 0)) !== (u.kind !== 'hero' && u.vMirror && !u.moving && time - u.atkT > 0.5);
   let lift = 0;
   if (u.jump) { const jp = clamp((time - u.jump.t0) / u.jump.dur, 0, 1); lift = Math.sin(jp * Math.PI) * u.jump.h; if (jp >= 1 && NET.guest) u.jump = null; }
   if (u.hkey === 'sovereign') lift += 26;                   // BATTLECRUISER floats above its shadow (Tee 2026-08-21: 'make it float')
