@@ -1851,8 +1851,8 @@ function drawUnit(u) {
     : (u.moving && anims.walk ? 'walk' : 'idle');
   u._atkAnim = state === 'attack';
   const sheet = anims[state] || anims.idle; if (!sheet) return;
-  // bastille's wide cannon inflates its sheet bbox, so it keys in smaller than the rest — compensate
-  let size = u.kind === 'hero' ? (u.hkey === 'sovereign' ? 180 : u.hkey === 'bastille' ? 150 : 120)
+  // bastille v2 (2026-08-21 Grok mech) is tall-normalised by --group; 165 gives the heavy walker its presence
+  let size = u.kind === 'hero' ? (u.hkey === 'sovereign' ? 180 : u.hkey === 'bastille' ? 165 : 120)
     : u.kind === 'monster' ? (u.key === 'mawborn_pitbrute' ? 116 : 96) : 84;
   if (u.kind !== 'hero') size = Math.round(size * (u.vScale || 1));
   const hFlip = (Math.cos(u.face) < 0) !== (u.kind !== 'hero' && u.vMirror && !u.moving && time - u.atkT > 0.5);
