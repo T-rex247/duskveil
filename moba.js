@@ -802,8 +802,8 @@ function castAbility(u, i, tx, ty, force) {
       u.face = ang;
       u.chan = { kind: 'gat', t0: time, until: time + ab.dur, fireT: time + 0.38, ang, ab, lvl: l, n: 0 };
       u.order = null; u.target = null; u.amove = null; cancelWindup(u);
-      fxPush({ kind: 'spinup', x: u.x, y: u.y, life: .4, max: .4, r: 30, c: lrgb, follow: u, rot: ang });
-      fxPush({ kind: 'cone', x: u.x, y: u.y, life: ab.dur, max: ab.dur, r: ab.range, ang, half: ab.spread + 0.05, c: lrgb, follow: u });
+      fxPush({ kind: 'spinup', x: u.x, y: u.y, life: .4, max: .4, r: 30, c: '74,217,224', follow: u, rot: ang });
+      fxPush({ kind: 'cone', x: u.x, y: u.y, life: ab.dur, max: ab.dur, r: ab.range, ang, half: ab.spread + 0.05, c: '74,217,224', follow: u });
       fxPush({ kind: 'dust', x: u.x, y: u.y, life: .5, max: .5, r: 36 });
       if (u === player) feed('GATLING SALVO — barrels hot.');
       break;
@@ -993,8 +993,8 @@ function tickBastille(dt) {
           const a = c.ang + (Math.random() - .5) * 2 * c.ab.spread;
           const px = Math.cos(c.ang + Math.PI / 2) * side * 9, py = Math.sin(c.ang + Math.PI / 2) * side * 9;
           const mx = u.x + Math.cos(c.ang) * 28 + px, my = u.y + Math.sin(c.ang) * 28 + py - 14;
-          projectiles.push({ x: mx, y: my, ang: a, sp: 980, left: c.ab.range, dmg: c.ab.dmg(c.lvl), team: u.team, src: u, c: '255,205,130', tracer: true });
-          fxPush({ kind: 'mflash', x: mx, y: my, rot: a, life: .08, max: .08, c: '255,190,110', r: 19 });
+          projectiles.push({ x: mx, y: my, ang: a, sp: 980, left: c.ab.range, dmg: c.ab.dmg(c.lvl), team: u.team, src: u, c: '74,217,224', tracer: true, teal: true });   // HALCYON TEAL plasma rounds (Tee 2026-08-21)
+          fxPush({ kind: 'mflash', x: mx, y: my, rot: a, life: .08, max: .08, c: '110,235,240', r: 19 });
           fxPush({ kind: 'casing', x: u.x - Math.cos(c.ang) * 2 + px, y: u.y - 12, vx: -Math.cos(c.ang) * 50 + (Math.random() - .5) * 60 + Math.cos(c.ang + Math.PI / 2) * side * 110, vy: -170 - Math.random() * 90, life: .7, max: .7, rot: Math.random() * TAU, rv: (Math.random() - .5) * 20 });
           if (c.n % 4 === 0) fxPush({ kind: 'smoke', x: mx, y: my, vx: Math.cos(c.ang) * 30, vy: -22, life: .55, max: .55, r: 7, grow: 26 });
           u._recoil = time;
@@ -1852,7 +1852,7 @@ function drawMechPresence(u, sx, sy, size) {
       const mx = sx + (fwd * 30 + -side * k * 9) * ZOOM, my = sy + (side * 30 * 0.35 + fwd * k * 6 - 16) * ZOOM;
       const r = (9 + 9 * h) * ZOOM;
       const g = cx.createRadialGradient(mx, my, 0, mx, my, r);
-      g.addColorStop(0, 'rgba(255,235,200,' + 0.55 * h + ')'); g.addColorStop(0.45, 'rgba(255,150,70,' + 0.35 * h + ')'); g.addColorStop(1, 'rgba(255,120,50,0)');
+      g.addColorStop(0, 'rgba(223,251,255,' + 0.6 * h + ')'); g.addColorStop(0.45, 'rgba(74,217,224,' + 0.4 * h + ')'); g.addColorStop(1, 'rgba(42,143,150,0)');
       cx.fillStyle = g; cx.beginPath(); cx.arc(mx, my, r, 0, TAU); cx.fill();
     }
   }
@@ -2037,9 +2037,9 @@ function drawFxAll(layer) {
     cx.fillStyle = hg; cx.beginPath(); cx.arc(sx, sy, hr, 0, TAU); cx.fill();
     if (p.tracer) {                                            // the round itself: opaque brass capsule, readable at speed
       cx.globalCompositeOperation = 'source-over'; cx.translate(sx, sy); cx.rotate(p.ang);
-      cx.fillStyle = '#3a2a12'; cx.fillRect(-7 * ZOOM, -2.4 * ZOOM, 12 * ZOOM, 4.8 * ZOOM);
-      cx.fillStyle = '#ffcf6a'; cx.fillRect(-6 * ZOOM, -1.6 * ZOOM, 10 * ZOOM, 3.2 * ZOOM);
-      cx.fillStyle = '#fff6d8'; cx.beginPath(); cx.moveTo(4 * ZOOM, -1.6 * ZOOM); cx.lineTo(7 * ZOOM, 0); cx.lineTo(4 * ZOOM, 1.6 * ZOOM); cx.closePath(); cx.fill();
+      cx.fillStyle = p.teal ? '#0e3a40' : '#3a2a12'; cx.fillRect(-7 * ZOOM, -2.4 * ZOOM, 12 * ZOOM, 4.8 * ZOOM);
+      cx.fillStyle = p.teal ? '#4ad9e0' : '#ffcf6a'; cx.fillRect(-6 * ZOOM, -1.6 * ZOOM, 10 * ZOOM, 3.2 * ZOOM);
+      cx.fillStyle = p.teal ? '#dffbff' : '#fff6d8'; cx.beginPath(); cx.moveTo(4 * ZOOM, -1.6 * ZOOM); cx.lineTo(7 * ZOOM, 0); cx.lineTo(4 * ZOOM, 1.6 * ZOOM); cx.closePath(); cx.fill();
     }
     cx.restore();
   }
@@ -2501,7 +2501,7 @@ function frame(ts) {
         dealDamage(hit, p.dmg, p.src);
         onAbilityHit(p.src, hit);
         if (p.src && p.src.hkey === 'ravener') { p.src.qMark = { t: hit, until: time + 3 }; hit._sigil = time + 3; if (p.src === player) feed('Sigil planted — press Q again to LUNGE.'); }
-        if (p.tracer) { sparks(p.x, p.y, p.ang, p.c, 0.9); fxPush({ kind: 'flash', x: p.x, y: p.y, life: .09, max: .09, r: 18 }); debris(p.x, p.y, 1); if (Math.random() < 0.4) sheetFx('fx_hit_cyan', { x: hit.x, y: hit.y, size: 64 }); addShake(p.x, p.y, 0.9); }
+        if (p.tracer) { sparks(p.x, p.y, p.ang, p.c, 0.9); fxPush({ kind: 'flash', x: p.x, y: p.y, life: .09, max: .09, r: 18 }); fxPush({ kind: 'shock', x: p.x, y: p.y, life: .18, max: .18, r: 16, c: '74,217,224' }); if (Math.random() < 0.5) sheetFx('fx_hit_cyan', { x: hit.x, y: hit.y, size: 64 }); addShake(p.x, p.y, 0.9); }
         else { sparks(p.x, p.y, p.ang, p.c, 1.4); fxPush({ kind: 'shock', x: p.x, y: p.y, life: .3, max: .3, r: 34, c: p.c }); }
         projectiles.splice(i, 1);
       } else if (p.left <= 0) { if (p.tracer) { fxPush({ kind: 'dust', x: p.x, y: p.y, life: .35, max: .35, r: 14 }); sparks(p.x, p.y, p.ang, p.c, 0.5); } projectiles.splice(i, 1); }
