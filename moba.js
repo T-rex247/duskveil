@@ -161,7 +161,7 @@ const HEROES = {
     ],
   },
   bastille: {
-    key: 'vectra_bastille', name: 'BASTILLE', role: 'WALKER ACE', fac: 'vectra', icon: '⚙',
+    key: 'vectra_bastille', name: 'GOLIATH', role: 'WALKER ACE', fac: 'vectra', icon: '⚙',   // renamed BASTILLE→GOLIATH (Tee 2026-08-21); hkey/asset key stays 'bastille'
     desc: 'Piloted twin-cannon walker. A gatling salvo that saws through a lane, a homing rocket swarm, thruster-vault mobility — and an orbital barrage that turns the ground to fire.',
     hp: 600, hpG: 72, dmg: 46, dmgG: 6, range: 300, cd: 0.62, speed: 168, r: 18,
     /* BASTILLE KIT v2 (Tee 2026-08-21: "each ability like a Diablo ability — max impressive").
