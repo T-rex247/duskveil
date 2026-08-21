@@ -201,7 +201,7 @@ const HEROES = {
     abilities: [
       { k: 'Q', name: 'BROADSIDE', icon: '◫', type: 'burst', cd: 5, range: 520, shots: 6, dmg: l => 30 + 12 * l },
       { k: 'W', name: 'DRONE SWARM', icon: '⬡', type: 'drones', cd: 5, dur: 6.5, count: 10, range: 620, dmg: l => 14 + 5 * l },   // Tee 2026-08-21: 'ten drones deploy from its chambers and swarm the enemy'
-      { k: 'E', name: 'OVERDRIVE RAM', icon: '⏩', type: 'dash', cd: 5, range: 340, radius: 130, dmg: l => 70 + 26 * l },
+      { k: 'E', name: 'DEFENSIVE MATRIX', icon: '⬡', type: 'matrix', cd: 5, range: 560, dur: 10, amount: l => 320 + 110 * l },   // Tee 2026-08-21: Brood-War science-vessel matrix shield — cast on an ally (or self)
       { k: 'R', name: 'ORBITAL JUDGMENT', icon: '◎', type: 'judgment', cd: 5, range: 900, radius: 420, dmg: l => 520 + 200 * l, ult: true },   // Tee 2026-08-21: cinematic super — calls the HALO station; green converging lances, then a horizon-wiping blast
     ],
   },
@@ -440,7 +440,7 @@ function dealDamage(t, amt, src) {
   if (t.kind === 'hero') amt = Math.round(amt * 0.62);   // heroes take 38% less — fights last longer (Tee 2026-08-19)
   if (DEMOF && t.plate) return;                    // demo: structures stay pristine
   if (t.hp === undefined || t.dead) return;
-  if (t.sh > 0) { const a = Math.min(t.sh, amt); t.sh -= a; amt -= a; }
+  if (t.sh > 0) { const a = Math.min(t.sh, amt); t.sh -= a; amt -= a; if (t._matrix > time) fxPush({ kind: 'matrixhit', x: t.x, y: t.y, life: .28, max: .28, r: (t.r || 18) + 34, ang: src ? Math.atan2(src.y - t.y, src.x - t.x) : 0 }); }
   t.hp -= amt; t.hitT = time;
   if (t.kind === 'hero' && src && src.kind) { t.lastHitBy = src; t.lastHitAt = time; }
   /* ON-HIT FLINCH + HITSTOP (motion spec §3.2) — the highest-ROI juice in 2D combat.
@@ -1072,6 +1072,20 @@ function castAbility(u, i, tx, ty, force) {
       if (u === player) feed('DRONE SWARM — bays open.');
       break;
     }
+    case 'matrix': {
+      // DEFENSIVE MATRIX: a hex-lattice energy bubble projected onto the ally hero nearest the cursor (self if none in range)
+      let tgt = null, bd = 140;
+      for (const h of heroes) { if (h.dead || h.team !== u.team || dist(u, h) > ab.range) continue; const d = Math.hypot(h.x - tx, h.y - ty); if (d < bd) { bd = d; tgt = h; } }
+      if (!tgt) { let bh = 9e9; for (const h of heroes) { if (h.dead || h.team !== u.team || h === u || dist(u, h) > ab.range) continue; if (h.hp / h.maxHp < bh) { bh = h.hp / h.maxHp; tgt = h; } } }
+      if (!tgt || tgt === u || !(tgt.hp / tgt.maxHp < 0.999) && !tgt) tgt = tgt || u;
+      if (!tgt) tgt = u;
+      tgt.sh = Math.max(tgt.sh || 0, ab.amount(l)); tgt.shT = time + ab.dur; tgt._matrix = time + ab.dur;
+      fxPush({ kind: 'laser', x1: u.x, y1: u.y - 24, x2: tgt.x, y2: tgt.y - 20, life: .3, max: .3, c: 'rgb(120,255,170)' });
+      fxPush({ kind: 'matrix', x: tgt.x, y: tgt.y, life: ab.dur, max: ab.dur, follow: tgt, r: (tgt.r || 18) + 34, c: '110,255,160' });
+      fxPush({ kind: 'shock', x: tgt.x, y: tgt.y, life: .4, max: .4, r: 60, c: '110,255,160' });
+      if (u === player) feed('DEFENSIVE MATRIX — ' + (tgt === u ? 'self' : tgt.hero.name) + ' shielded.');
+      break;
+    }
     case 'barrage': {
       capTo(ab.range);
       const X = tx, Y = ty;
@@ -1502,6 +1516,7 @@ function heroesThink(dt) {
     else if (foeHero && time >= e.abCd[0]) castAbility(e, 0, foeHero.x, foeHero.y);
     else if (m && time >= e.abCd[1] && e.level >= 2) castAbility(e, 1, m.x, m.y);
     else if (e.hkey === 'bastille' && foeHero && dist(e, foeHero) < 300 && time >= e.abCd[2]) castAbility(e, 2, e.x, e.y);
+    else if (e.hkey === 'sovereign' && time >= e.abCd[2]) { const hurt = heroes.find(h => !h.dead && h.team === e.team && dist(e, h) < 560 && h.hp < h.maxHp * 0.7 && time - (h.hitT || -9) < 3); if (hurt) castAbility(e, 2, hurt.x, hurt.y); }
     else if (e.hp < e.maxHp * .6 && time >= e.abCd[2] && e.level >= 3) {
       if (e.hkey === 'korvax' && foeHero) { const a2 = Math.atan2(e.y - foeHero.y, e.x - foeHero.x); castAbility(e, 2, e.x + Math.cos(a2) * 280, e.y + Math.sin(a2) * 280); }
       else castAbility(e, 2, e.x, e.y);
@@ -2378,6 +2393,29 @@ function drawFxAll(layer) {
       const col = f.dark ? '40,34,30' : f.lite ? '225,225,230' : '170,170,175';
       g.addColorStop(0, 'rgba(' + col + ',' + (f.lite ? 0.55 : 0.42) * a + ')'); g.addColorStop(1, 'rgba(' + col + ',0)');
       cx.fillStyle = g; cx.beginPath(); cx.arc(sx, sy, rr, 0, TAU); cx.fill();
+    } else if (f.kind === 'matrix') {
+      // DEFENSIVE MATRIX bubble: translucent sphere, hex lattice, bright rim, slow shimmer (science-vessel green)
+      const fade = Math.min(1, a * 4, (f.max - f.life) * 5), R = f.r * ZOOM, cy0 = sy - 14 * ZOOM;
+      cx.globalAlpha = fade;
+      const g = cx.createRadialGradient(sx - R * 0.3, cy0 - R * 0.3, R * 0.1, sx, cy0, R);
+      g.addColorStop(0, 'rgba(' + f.c + ',0.05)'); g.addColorStop(0.75, 'rgba(' + f.c + ',0.12)'); g.addColorStop(0.95, 'rgba(' + f.c + ',0.45)'); g.addColorStop(1, 'rgba(' + f.c + ',0)');
+      cx.fillStyle = g; cx.beginPath(); cx.ellipse(sx, cy0, R, R * 0.86, 0, 0, TAU); cx.fill();
+      cx.save(); cx.beginPath(); cx.ellipse(sx, cy0, R, R * 0.86, 0, 0, TAU); cx.clip();
+      cx.strokeStyle = 'rgba(' + f.c + ',' + (0.28 + 0.1 * Math.sin(time * 3)) + ')'; cx.lineWidth = 1 * ZOOM;
+      const hs = 11 * ZOOM, off = (time * 10) % (hs * 1.5);
+      for (let row = -R / hs - 1; row < R / hs + 1; row++) for (let col = -R / hs - 1; col < R / hs + 1; col++) {
+        const hx = sx + col * hs * 1.5, hy = cy0 + (row + (col % 2 ? 0.5 : 0)) * hs * 1.73 + off;
+        cx.beginPath(); for (let k2 = 0; k2 < 6; k2++) { const aa = k2 / 6 * TAU; const px = hx + Math.cos(aa) * hs * 0.55, py = hy + Math.sin(aa) * hs * 0.55; k2 ? cx.lineTo(px, py) : cx.moveTo(px, py); } cx.closePath(); cx.stroke();
+      }
+      cx.restore();
+      cx.strokeStyle = 'rgba(235,255,240,' + (0.7 + 0.3 * Math.sin(time * 5)) + ')'; cx.lineWidth = 1.6 * ZOOM; cx.beginPath(); cx.ellipse(sx, cy0, R, R * 0.86, 0, 0, TAU); cx.stroke();
+    } else if (f.kind === 'matrixhit') {
+      const p = 1 - a, R = f.r * ZOOM, cy0 = sy - 14 * ZOOM;
+      cx.strokeStyle = 'rgba(200,255,220,' + 0.9 * a + ')'; cx.lineWidth = (4 - 3 * p) * ZOOM;
+      cx.beginPath(); cx.ellipse(sx, cy0, R * (1 + 0.12 * p), R * 0.86 * (1 + 0.12 * p), 0, f.ang - 0.9 - p, f.ang + 0.9 + p); cx.stroke();
+      const g = cx.createRadialGradient(sx + Math.cos(f.ang) * R, cy0 + Math.sin(f.ang) * R * 0.86, 0, sx + Math.cos(f.ang) * R, cy0 + Math.sin(f.ang) * R * 0.86, 24 * ZOOM);
+      g.addColorStop(0, 'rgba(255,255,255,' + 0.8 * a + ')'); g.addColorStop(1, 'rgba(110,255,160,0)');
+      cx.fillStyle = g; cx.beginPath(); cx.arc(sx + Math.cos(f.ang) * R, cy0 + Math.sin(f.ang) * R * 0.86, 24 * ZOOM, 0, TAU); cx.fill();
     } else if (f.kind === 'skylaser') {
       if (f.life > f.onT) { cx.restore(); continue; }
       const k = Math.min(1, (f.onT - f.life) / 0.2), fl = 0.7 + 0.3 * Math.sin(time * 30);
@@ -3072,6 +3110,7 @@ function frame(ts) {
         }
       }
       else if (f.kind === 'bind' && f.follow) { f.x = f.follow.x; f.y = f.follow.y; if (f.follow.dead) f.life = 0; }
+      else if (f.kind === 'matrix' && f.follow) { f.x = f.follow.x; f.y = f.follow.y; if (f.follow.dead || !(f.follow.sh > 0)) f.life = Math.min(f.life, 0.25); }
       else if (f.kind === 'fire') {
         f.tickT += dt;
         if (f.tickT >= 0.5 && f.src) { f.tickT = 0;
