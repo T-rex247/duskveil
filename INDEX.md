@@ -6,6 +6,8 @@ Code now PUBLIC at github.com/T-rex247/duskveil under **AGPL-3.0** (Tee accepted
 
 # duskveil — INDEX
 
+**RENAMED 2026-08-21 (Tee): PROJECT DUSKVEIL → PROJECT VALOR** (display/title/HUD only; repo, hkeys, asset paths and duskveil.vercel.app unchanged). Listed FIRST on the hub.
+
 ## DIRECTIONAL (360) SHEETS — 2026-08-21 — now GOLIATH, KORVAX, LIORA, CORWEN, RAVENER, BATTLECRUISER (stern/bow, 384 cells, `DIR_SCALE` evens out the per-group shared scale)
 **GOLIATH E = LASER SWEEP** (Tee 2026-08-21, replaced the blades: '360 laser sweep like Iron Man'): `u.chan={kind:'sweep'}` 1.6s rooted; two forearm lasers 180° apart rotate one full turn (turn = p^0.9·TAU), each foe cut ONCE per beam pass (`t._sweepPass`), outward shove, scorch ring + embers along the tips, beams drawn in drawMechPresence (white core/red bloom + motion-blur ghost). Blades code kept dormant (`case 'blades'`). Previously: **GOLIATH E = PLASMA BLADES** (Tee: 'melee laser sword combo, Jedi-like, dual sabers, 5s'): `u.blades` combo engine in tickBastille (left slash · right slash · spin finisher w/ knockback, 0.42s gap, blade-dash to the next victim within 440), blades drawn in drawMechPresence (cyan + red, hum, swing arcs), icon `bastille_2.jpg` regenerated. **GOLIATH R kept as the 'previous' barrage** (Tee) + per-shell `skylaser` targeting lines, 1.45–1.9× shell bodies, re-entry cones, embers/smoke stacks (dome/mushroom tried and reverted).
  (Tee: 'when I move up his body turns, I can see his back — total 360')

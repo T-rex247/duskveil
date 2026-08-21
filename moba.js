@@ -1,5 +1,5 @@
 'use strict';
-/* PROJECT DUSKVEIL — hero-command battle arena (HALCYON universe).
+/* PROJECT VALOR (formerly DUSKVEIL; repo/assets/URL keep the old name) — hero-command battle arena (HALCYON universe).
  * One lane, two cores, minion waves, jungle camps, four legends.
  * Single-file, no build step; art = HALCYON atlas sheets (mirror-facing). */
 

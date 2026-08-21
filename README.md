@@ -1,4 +1,4 @@
-# PROJECT DUSKVEIL
+# PROJECT VALOR (formerly PROJECT DUSKVEIL)
 
 A 3v3 hero battle arena (MOBA) in the HALCYON universe, by HUSSL PRODUCTION.
 Single-file canvas engine, host-authoritative PeerJS multiplayer.
