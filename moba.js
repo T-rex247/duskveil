@@ -201,7 +201,7 @@ const HEROES = {
     abilities: [
       { k: 'Q', name: 'BROADSIDE', icon: '◫', type: 'burst', cd: 5, range: 520, shots: 6, dmg: l => 30 + 12 * l },
       { k: 'W', name: 'DRONE SWARM', icon: '⬡', type: 'drones', cd: 5, dur: 6.5, count: 10, range: 620, dmg: l => 14 + 5 * l },   // Tee 2026-08-21: 'ten drones deploy from its chambers and swarm the enemy'
-      { k: 'E', name: 'DEFENSIVE MATRIX', icon: '⬡', type: 'matrix', cd: 5, range: 560, dur: 10, amount: l => 320 + 110 * l },   // Tee 2026-08-21: Brood-War science-vessel matrix shield — cast on an ally (or self)
+      { k: 'E', name: 'DRONE SPHERE', icon: '⬡', type: 'orbdrones', cd: 5, dur: 10, count: 14, radius: 150, amount: l => 320 + 110 * l, dmg: l => 22 + 7 * l },   // Tee 2026-08-21: 'drones swarm in an orb shield 360 around the ship, a ball that slices through anything' (10s)
       { k: 'R', name: 'ORBITAL JUDGMENT', icon: '◎', type: 'judgment', cd: 5, range: 900, radius: 420, dmg: l => 520 + 200 * l, ult: true },   // Tee 2026-08-21: cinematic super — calls the HALO station; green converging lances, then a horizon-wiping blast
     ],
   },
@@ -1084,6 +1084,15 @@ function castAbility(u, i, tx, ty, force) {
       if (u === player) feed('DRONE SWARM — bays open.');
       break;
     }
+    case 'orbdrones': {
+      // DRONE SPHERE: twelve drones launch and lock into three tilted orbital rings around the ship — a spinning ball that
+      // soaks damage (matrix shield) and slices anything that touches it (tick damage + outward shove).
+      u.sh = Math.max(u.sh || 0, ab.amount(l)); u.shT = time + ab.dur; u._matrix = time + ab.dur;
+      fxPush({ kind: 'orbsphere', x: u.x, y: u.y, life: ab.dur, max: ab.dur, follow: u, r: ab.radius, n: ab.count, ab, lvl: l, src: u, tickT: 0, t0: time });
+      fxPush({ kind: 'shock', x: u.x, y: u.y - 14, life: .4, max: .4, r: ab.radius * 1.2, c: '74,217,224' });
+      if (u === player) feed('DRONE SPHERE — formation locked.');
+      break;
+    }
     case 'matrix': {
       // DEFENSIVE MATRIX: a hex-lattice energy bubble projected onto the ally hero nearest the cursor (self if none in range)
       let tgt = null, bd = 140;
@@ -1552,7 +1561,7 @@ function heroesThink(dt) {
     else if (foeHero && time >= e.abCd[0]) castAbility(e, 0, foeHero.x, foeHero.y);
     else if (m && time >= e.abCd[1] && e.level >= 2) castAbility(e, 1, m.x, m.y);
     else if (e.hkey === 'bastille' && foeHero && dist(e, foeHero) < 300 && time >= e.abCd[2]) castAbility(e, 2, e.x, e.y);
-    else if (e.hkey === 'sovereign' && time >= e.abCd[2]) { const hurt = heroes.find(h => !h.dead && h.team === e.team && dist(e, h) < 560 && h.hp < h.maxHp * 0.7 && time - (h.hitT || -9) < 3); if (hurt) castAbility(e, 2, hurt.x, hurt.y); }
+    else if (e.hkey === 'sovereign' && time >= e.abCd[2] && foeHero && dist(e, foeHero) < 420) castAbility(e, 2, e.x, e.y);
     else if (e.hp < e.maxHp * .6 && time >= e.abCd[2] && e.level >= 3) {
       if (e.hkey === 'korvax' && foeHero) { const a2 = Math.atan2(e.y - foeHero.y, e.x - foeHero.x); castAbility(e, 2, e.x + Math.cos(a2) * 280, e.y + Math.sin(a2) * 280); }
       else castAbility(e, 2, e.x, e.y);
@@ -2447,6 +2456,36 @@ function drawFxAll(layer) {
       const col = f.dark ? '40,34,30' : f.lite ? '225,225,230' : '170,170,175';
       g.addColorStop(0, 'rgba(' + col + ',' + (f.lite ? 0.55 : 0.42) * a + ')'); g.addColorStop(1, 'rgba(' + col + ',0)');
       cx.fillStyle = g; cx.beginPath(); cx.arc(sx, sy, rr, 0, TAU); cx.fill();
+    } else if (f.kind === 'orbsphere') {
+      const fade = Math.min(1, a * 4, (f.max - f.life) * 3), R = f.r * ZOOM, cy0 = sy - 14 * ZOOM, age = time - f.t0;
+      // faint sphere + three tilted orbital rings
+      cx.globalAlpha = fade * 0.9;
+      const g = cx.createRadialGradient(sx, cy0, R * 0.6, sx, cy0, R * 1.05);
+      g.addColorStop(0, 'rgba(74,217,224,0)'); g.addColorStop(0.85, 'rgba(74,217,224,0.12)'); g.addColorStop(1, 'rgba(74,217,224,0)');
+      cx.fillStyle = g; cx.beginPath(); cx.ellipse(sx, cy0, R * 1.05, R * 0.9, 0, 0, TAU); cx.fill();
+      const rings = [[0.0, 0.45], [1.05, 0.75], [-1.05, 0.75]];
+      for (const [rot, sq] of rings) { cx.save(); cx.translate(sx, cy0); cx.rotate(rot); cx.strokeStyle = 'rgba(74,217,224,0.35)'; cx.lineWidth = 1 * ZOOM; cx.setLineDash([4 * ZOOM, 6 * ZOOM]); cx.lineDashOffset = -time * 60; cx.beginPath(); cx.ellipse(0, 0, R, R * sq, 0, 0, TAU); cx.stroke(); cx.restore(); }
+      // the drones: n of them spread over the three rings, each ring spinning at its own rate
+      const per = Math.ceil(f.n / 3);
+      for (let i2 = 0; i2 < f.n; i2++) {
+        const ri = i2 % 3, [rot, sq] = rings[ri], spd = (ri === 0 ? 2.6 : ri === 1 ? -2.1 : 2.3), ph = (Math.floor(i2 / 3) / per) * TAU + age * spd;
+        const lx = Math.cos(ph) * R, ly = Math.sin(ph) * R * sq;
+        const dx = sx + lx * Math.cos(rot) - ly * Math.sin(rot), dy = cy0 + lx * Math.sin(rot) + ly * Math.cos(rot);
+        const front = Math.sin(ph) > 0 ? 1 : 0.55;             // behind the ship = dimmer/smaller
+        const hd = ph + Math.PI / 2 + rot, sc2 = 0.75 * front + 0.25;
+        cx.save(); cx.globalAlpha = fade * front; cx.translate(dx, dy); cx.rotate(hd * (spd > 0 ? 1 : -1) + (spd > 0 ? 0 : Math.PI));
+        cx.globalCompositeOperation = 'source-over';
+        const L = 18 * sc2 * ZOOM, Wd = 11 * sc2 * ZOOM;
+        cx.fillStyle = '#1d2228'; cx.beginPath(); cx.moveTo(L * 0.6, 0); cx.lineTo(-L * 0.45, -Wd * 0.6); cx.lineTo(-L * 0.25, 0); cx.lineTo(-L * 0.45, Wd * 0.6); cx.closePath(); cx.fill();
+        cx.fillStyle = '#9aa3ae'; cx.beginPath(); cx.moveTo(L * 0.5, 0); cx.lineTo(-L * 0.3, -Wd * 0.35); cx.lineTo(-L * 0.15, 0); cx.lineTo(-L * 0.3, Wd * 0.35); cx.closePath(); cx.fill();
+        cx.globalCompositeOperation = 'lighter';
+        const gg = cx.createRadialGradient(-L * 0.3, 0, 0, -L * 0.3, 0, 8 * sc2 * ZOOM); gg.addColorStop(0, 'rgba(235,255,255,0.95)'); gg.addColorStop(0.4, 'rgba(74,217,224,0.7)'); gg.addColorStop(1, 'rgba(74,217,224,0)');
+        cx.fillStyle = gg; cx.beginPath(); cx.arc(-L * 0.3, 0, 8 * sc2 * ZOOM, 0, TAU); cx.fill();
+        // slicing edge: a short bright blade-line ahead of each drone
+        cx.strokeStyle = 'rgba(200,255,255,0.9)'; cx.lineWidth = 1.5 * ZOOM; cx.beginPath(); cx.moveTo(L * 0.6, 0); cx.lineTo(L * 1.6, 0); cx.stroke();
+        cx.restore();
+      }
+      cx.globalAlpha = 1;
     } else if (f.kind === 'matrix') {
       // DEFENSIVE MATRIX bubble: translucent sphere, hex lattice, bright rim, slow shimmer (science-vessel green)
       const fade = Math.min(1, a * 4, (f.max - f.life) * 5), R = f.r * ZOOM, cy0 = sy - 14 * ZOOM;
@@ -3164,6 +3203,17 @@ function frame(ts) {
         }
       }
       else if (f.kind === 'bind' && f.follow) { f.x = f.follow.x; f.y = f.follow.y; if (f.follow.dead) f.life = 0; }
+      else if (f.kind === 'orbsphere' && f.follow) {
+        const u2 = f.follow; f.x = u2.x; f.y = u2.y;
+        if (u2.dead) { f.life = 0; continue; }
+        f.tickT += dt;
+        if (f.tickT >= 0.22) { f.tickT = 0;
+          for (const t of units) { if (!foesOf(u2)(t)) continue; const d = Math.hypot(t.x - u2.x, t.y - u2.y); if (d > f.r + t.r + 14 || d < 4) continue;
+            dealDamage(t, f.ab.dmg(f.lvl), u2); onAbilityHit(u2, t); const ka = Math.atan2(t.y - u2.y, t.x - u2.x); t.kb = { vx: Math.cos(ka) * 160, vy: Math.sin(ka) * 160, until: time + 0.12 };
+            sparks(t.x, t.y - 8, ka, '120,240,255', 1.2); fxPush({ kind: 'flash', x: t.x, y: t.y - 8, life: .08, max: .08, r: 14 }); }
+        }
+        if (Math.random() < dt * 10) { const a2 = Math.random() * TAU; fxPush({ kind: 'spk', x: u2.x + Math.cos(a2) * f.r, y: u2.y - 14 + Math.sin(a2) * f.r * 0.8, vx: -Math.sin(a2) * 120, vy: Math.cos(a2) * 90, life: .2, max: .2, c: '74,217,224', w: 1.6 }); }
+      }
       else if (f.kind === 'matrix' && f.follow) { f.x = f.follow.x; f.y = f.follow.y; if (f.follow.dead || !(f.follow.sh > 0)) f.life = Math.min(f.life, 0.25); }
       else if (f.kind === 'fire') {
         f.tickT += dt;
