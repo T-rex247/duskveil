@@ -48,7 +48,7 @@ const ANIMS = {};           // key -> {idle:{img,n,fw,fh,fps}, walk, attack}
 const FX = {};              // fxkey -> sheet
 const PLATES = {};          // plate key -> img
 const UNIT_SHEETS = ['vectra_sovereign', 'dawnmarch_corwen', 'dawnmarch_liora', 'dawnmarch_squire', 'dawnmarch_sunbow',
-  'vectra_bastille', 'mawborn_ravener', 'mawborn_cinderling', 'mawborn_imp', 'mawborn_fiend', 'mawborn_pitbrute', 'mawborn_ripper', 'mawborn_wyrm'];
+  'vectra_bastille', 'mawborn_ravener', 'mawborn_cinderling', 'mawborn_imp', 'mawborn_fiend', 'mawborn_pitbrute', 'mawborn_ripper', 'mawborn_wyrm', 'titan_korvax'];
 /* ENEMY CREATURE SKINS (Tee 2026-08-21: 'make the enemy always skin zergling-like creatures') — every team-1 hero is DRAWN as a
  * Mawborn swarm creature regardless of the kit it runs. Pure presentation: stats/abilities/hitboxes untouched. Falls back to the
  * hero's own sheet if a creature sheet is missing. Ravener is already a creature. */
@@ -207,6 +207,20 @@ const HEROES = {
       { k: 'R', name: 'ORBITAL BRIMSTONE', icon: '♨', type: 'nuke', cd: 80, range: 1500, radius: 270, delay: 2.2, dmg: l => 420 + 160 * l, ult: true },
     ],
   },
+  /* KORVAX, THE TITAN (Tee 2026-08-21: "a new character inspired by thanos and his cgi rings — incorporate the fight-scene CGI as his
+   * abilities"). ORIGINAL titan warlord; the kit is the duel's VFX language: purple power-blast lightning, orange rune-ring mandalas +
+   * golden bindings, a sparking ring portal, and a singularity that drags everything in before it detonates into teal shards. */
+  korvax: {
+    key: 'titan_korvax', name: 'KORVAX', role: 'THE TITAN', fac: 'titan', icon: '✊',
+    desc: 'A warlord from beyond the veil. A fist that splits the ground with violet lightning, rune-rings that lash and bind, a portal he steps through — and a singularity that swallows the fight whole.',
+    hp: 980, hpG: 110, dmg: 70, dmgG: 9, range: 80, cd: 1.05, speed: 160, r: 20,
+    abilities: [
+      { k: 'Q', name: 'POWER BLAST', icon: '✊', type: 'pblast', cd: 7, range: 440, width: 70, charge: 0.4, dmg: l => 110 + 36 * l },
+      { k: 'W', name: 'RUNE RINGS', icon: '◎', type: 'rings', cd: 14, dur: 5, reach: 230, dmg: l => 45 + 16 * l },
+      { k: 'E', name: 'RING PORTAL', icon: '⊚', type: 'portal', cd: 11, range: 460, radius: 90, dmg: l => 50 + 18 * l },
+      { k: 'R', name: 'SINGULARITY', icon: '●', type: 'singularity', cd: 60, range: 700, radius: 270, pull: 1.6, dmg: l => 260 + 110 * l, ult: true },
+    ],
+  },
 };
 /* ---- per-champion MOTION ARCHETYPE (docs/CHAMPION-MOTION-SPEC.md §4) --------------
  * The five sliders that carry an archetype with ZERO new art:
@@ -227,6 +241,7 @@ const MOTION = {
   corwen:    { windup: .25, turn: .10, bob: 5.0, cadence: 6.6,  lean: .038, asRamp: 0,   hitstop: .08 },
   bastille:  { windup: .30, turn: .12, bob: 4.4, cadence: 6.4,  lean: .035, asRamp: .12, hitstop: .045, stomp: true },   // GOLIATH: slower, heavier, piston plant — no hip sway
   sovereign: { windup: .35, turn: .07, bob: 4.2, cadence: 0,    lean: .022, asRamp: 0,   hitstop: .07 },
+  korvax:    { windup: .30, turn: .09, bob: 4.8, cadence: 6.0,  lean: .030, asRamp: 0,   hitstop: .09, stomp: true },
 };
 const MOTION_DEF = { windup: .22, turn: .22, bob: 3.2, cadence: 9, lean: .055, asRamp: 0, hitstop: .05 };
 function motionOf(u) { return (u && u.hkey && MOTION[u.hkey]) || MOTION_DEF; }
@@ -543,7 +558,7 @@ function fireAt(u, t) {
 }
 function fireFx(u, t) {
   const fac = u.key.split('_')[0];
-  const lrgb = { dawnmarch: '255,233,168', vectra: '159,232,255', mawborn: '255,150,90' }[fac] || '220,235,255';
+  const lrgb = { dawnmarch: '255,233,168', vectra: '159,232,255', mawborn: '255,150,90', titan: '190,120,255' }[fac] || '220,235,255';
   const melee = u.range <= 80;
   const mx = u.x + Math.cos(u.face) * (u.r + 6), my = u.y + Math.sin(u.face) * (u.r + 6);
   if (u.hkey === 'bastille') {                              // GOLIATH: red emitter LANCE from the forearm — white core, red bloom
@@ -601,7 +616,7 @@ function sheetFx(key, o) {
 }
 function boom(u) {
   const fac = u.key.split('_')[0];
-  const lrgb = { dawnmarch: '255,233,168', vectra: '159,232,255', mawborn: '255,150,90' }[fac] || '220,235,255';
+  const lrgb = { dawnmarch: '255,233,168', vectra: '159,232,255', mawborn: '255,150,90', titan: '190,120,255' }[fac] || '220,235,255';
   fxPush({ kind: 'flash', x: u.x, y: u.y, life: .16, max: .16, r: u.kind === 'hero' ? 40 : 22 });
   fxPush({ kind: 'shock', x: u.x, y: u.y, life: .4, max: .4, r: u.kind === 'hero' ? 70 : 44, c: lrgb });
   for (let i = 0; i < 8; i++) {
@@ -661,7 +676,7 @@ function castAbility(u, i, tx, ty, force) {
   if (u.atkPhase === 'COOLDOWN') { u.atkPhase = null; u.atkTimer = 0; u.cdT = Math.min(u.cdT, time); }
   u.castT = time; u.face = Math.atan2(ty - u.y, tx - u.x) || u.face;
   const l = u.level, fac = u.hero.fac;
-  const lrgb = { dawnmarch: '255,233,168', vectra: '159,232,255', mawborn: '255,150,90' }[fac];
+  const lrgb = { dawnmarch: '255,233,168', vectra: '159,232,255', mawborn: '255,150,90', titan: '190,120,255' }[fac];
   let cdMul = (u.buff === 'WARDLIGHT' ? 0.8 : 1) * (1 - Math.min(0.4, itemStat(u, 'cdr')));
   const ang = Math.atan2(ty - u.y, tx - u.x);
   const capTo = (r) => { const d = Math.hypot(tx - u.x, ty - u.y); if (d > r) { tx = u.x + (tx - u.x) / d * r; ty = u.y + (ty - u.y) / d * r; } };
@@ -715,6 +730,10 @@ function castAbility(u, i, tx, ty, force) {
       capTo(ab.range);
       const X = tx, Y = ty;
       fxPush({ kind: 'laser', x1: u.x, y1: u.y, x2: X, y2: Y, life: .2, max: .2, c: 'rgb(' + lrgb + ')' });
+      if (u.hkey === 'sovereign') {                          // OVERDRIVE RAM = a blue-white COMET streak (the Endgame ship-punch)
+        fxPush({ kind: 'comet', x1: u.x, y1: u.y - 20, x2: X, y2: Y - 20, life: .55, max: .55 });
+        for (let k2 = 0; k2 < 18; k2++) { const t2 = k2 / 18; fxPush({ kind: 'spk', x: lerp(u.x, X, t2), y: lerp(u.y, Y, t2) - 20, vx: (Math.random() - .5) * 160, vy: (Math.random() - .5) * 160, life: .3 + Math.random() * .3, max: .6, c: k2 % 2 ? '159,232,255' : '255,255,255', w: 2.5 }); }
+      }
       for (let g2 = 1; g2 <= 3; g2++) fxPush({ kind: 'ghost', key: skinKey(u), x: lerp(u.x, X, g2 / 4), y: lerp(u.y, Y, g2 / 4), face: u.face, life: .34, max: .34, size: 120 });
       u.x = X; u.y = Y; u.order = null; u.face = ang;
       if (ab.dmg) aoeDamage(X, Y, ab.radius, ab.dmg(l), u);
@@ -764,6 +783,7 @@ function castAbility(u, i, tx, ty, force) {
       }
       fxPush({ kind: 'shock', x: u.x, y: u.y, life: .4, max: .4, r: 60, c: lrgb });
       fxPush({ kind: 'scorch', x: u.x, y: u.y, life: 1.6, max: 1.6, r: 55, c: lrgb });
+      fxPush({ kind: 'tendrils', x: u.x, y: u.y, life: 1.0, max: 1.0, r: 90, c: '255,60,70', seed: Math.random() * 9 });   // red chaos tendrils pull the brood up out of the ground
       sparks(u.x, u.y, -Math.PI / 2, lrgb, 2);
       break;
     }
@@ -796,6 +816,9 @@ function castAbility(u, i, tx, ty, force) {
       const X = tx, Y = ty;
       feed(u === player ? 'ORBITAL BRIMSTONE inbound…' : '⚠ ENEMY NUKE INBOUND — MOVE!');
       fxPush({ kind: 'meteor', x: X, y: Y, life: ab.delay, max: ab.delay });
+      // beam-rain precursor: three blue sky-lances stab the zone before the brimstone lands (the Endgame orbital strike)
+      for (let k2 = 0; k2 < 3; k2++) { const a2 = k2 / 3 * TAU + 0.7, bx = X + Math.cos(a2) * ab.radius * 0.55, by = Y + Math.sin(a2) * ab.radius * 0.35;
+        telegraphs.push({ x: bx, y: by, r: 60, at: time + ab.delay * (0.45 + 0.15 * k2), team: u.team, c: '140,200,255', born: time + ab.delay * (0.2 + 0.15 * k2), shell: true, cb: () => { fxPush({ kind: 'column', x: bx, y: by, life: .6, max: .6, r: 70, c: '140,200,255' }); fxPush({ kind: 'flash', x: bx, y: by, life: .2, max: .2, r: 60 }); fxPush({ kind: 'shock', x: bx, y: by, life: .45, max: .45, r: 80, c: '140,200,255' }); debris(bx, by, 6); addShake(bx, by, 6); aoeDamage(bx, by, 70, Math.round(ab.dmg(l) * 0.15), u); } }); }
       telegraphs.push({ x: X, y: Y, r: ab.radius, at: time + ab.delay, team: u.team, c: lrgb, born: time, nuke: true, cb: () => {
         aoeDamage(X, Y, ab.radius, ab.dmg(l), u);
         fxPush({ kind: 'column', x: X, y: Y, life: .7, max: .7, r: ab.radius * 1.2, c: '255,170,80' });
@@ -897,6 +920,91 @@ function castAbility(u, i, tx, ty, force) {
         fxPush({ kind: 'shellfall', x: bx, y: by, life: at - time, max: at - time, fallT: 0.8, big: last, c: '255,210,150' });
       }
       ultCeremony(u, total, '255,140,60');
+      break;
+    }
+    /* ======================= KORVAX — the Titan duel's CGI as a kit ======================= */
+    case 'pblast': {
+      u.face = ang;
+      u.chan = { kind: 'anchor', t0: time, until: time + ab.charge };
+      u.order = null; u.target = null; u.amove = null; cancelWindup(u);
+      const fx0 = u.x + Math.cos(ang) * 30, fy0 = u.y + Math.sin(ang) * 30 * 0.5 - 18;
+      fxPush({ kind: 'spinup', x: u.x, y: u.y, life: ab.charge, max: ab.charge, r: 30, c: '190,120,255', follow: u, rot: ang });
+      fxPush({ kind: 'dust', x: u.x, y: u.y, life: .5, max: .5, r: 40 });
+      telegraphs.push({ x: u.x, y: u.y, r: 1, at: time + ab.charge, team: u.team, c: '190,120,255', born: time, soft: true, cb: () => {
+        if (u.dead) return;
+        const ex = u.x + Math.cos(ang) * ab.range, ey = u.y + Math.sin(ang) * ab.range;
+        fxPush({ kind: 'lightning', x1: u.x + Math.cos(ang) * 30, y1: u.y + Math.sin(ang) * 30 - 18, x2: ex, y2: ey, life: .5, max: .5, c: '190,120,255', w: ab.width });
+        fxPush({ kind: 'flash', x: u.x + Math.cos(ang) * 30, y: u.y - 18, life: .14, max: .14, r: 40 });
+        fxPush({ kind: 'shock', x: ex, y: ey, life: .5, max: .5, r: 90, c: '190,120,255' });
+        fxPush({ kind: 'crack', x: ex, y: ey, life: 5, max: 5, r: 80, seed: Math.random() * 9 });
+        fxPush({ kind: 'scorch', x: ex, y: ey, life: 4, max: 4, r: 60, c: '190,120,255' });
+        debris(ex, ey, 12);
+        for (const t of units) {
+          if (!foesOf(u)(t)) continue;
+          const dx = t.x - u.x, dy = t.y - u.y, proj = dx * Math.cos(ang) + dy * Math.sin(ang);
+          if (proj < 0 || proj > ab.range + t.r) continue;
+          const off = Math.abs(-dx * Math.sin(ang) + dy * Math.cos(ang));
+          if (off < ab.width + t.r) {
+            dealDamage(t, ab.dmg(l), u); onAbilityHit(u, t);
+            t.kb = { vx: Math.cos(ang) * 620, vy: Math.sin(ang) * 620, until: time + 0.28 };
+            for (let k2 = 0; k2 < 3; k2++) debris(t.x, t.y, 1);
+          }
+        }
+        for (const tw of towers) { if (tw.hp <= 0 || tw.team === u.team) continue; const dx = tw.x - u.x, dy = tw.y - u.y, proj = dx * Math.cos(ang) + dy * Math.sin(ang); if (proj > 0 && proj < ab.range && Math.abs(-dx * Math.sin(ang) + dy * Math.cos(ang)) < ab.width + tw.r) dealDamage(tw, ab.dmg(l), u); }
+        addShake(u.x, u.y, 11); hitstop = Math.max(hitstop, 0.06);
+      } });
+      if (u === player) feed('POWER BLAST — charging…');
+      break;
+    }
+    case 'rings': {
+      u.rings = { until: time + ab.dur, lashT: time + 0.6, ab, lvl: l };
+      fxPush({ kind: 'mandala', x: u.x, y: u.y, life: ab.dur, max: ab.dur, follow: u, c: '255,150,60' });
+      fxPush({ kind: 'shock', x: u.x, y: u.y, life: .4, max: .4, r: 60, c: '255,160,70' });
+      if (u === player) feed('RUNE RINGS — the circles answer.');
+      break;
+    }
+    case 'portal': {
+      capTo(ab.range);
+      const X = tx, Y = ty;
+      u.face = ang;
+      u.chan = { kind: 'anchor', t0: time, until: time + 0.3 };
+      u.order = null; u.target = null; u.amove = null; cancelWindup(u);
+      fxPush({ kind: 'ring', x: u.x, y: u.y - 30, life: .9, max: .9, r: 60, c: '255,170,60' });
+      fxPush({ kind: 'ring', x: X, y: Y - 30, life: 1.1, max: 1.1, r: 60, c: '255,170,60', delay: 0.2 });
+      telegraphs.push({ x: X, y: Y, r: 1, at: time + 0.3, team: u.team, c: '255,170,60', born: time, soft: true, cb: () => {
+        if (u.dead) return;
+        fxPush({ kind: 'flash', x: u.x, y: u.y - 20, life: .14, max: .14, r: 34 });
+        u.x = X; u.y = Y; u.order = null;
+        aoeDamage(X, Y, ab.radius, ab.dmg(l), u);
+        fxPush({ kind: 'flash', x: X, y: Y - 20, life: .16, max: .16, r: 44 });
+        fxPush({ kind: 'shock', x: X, y: Y, life: .4, max: .4, r: ab.radius, c: '255,170,60' });
+        sparks(X, Y - 20, -Math.PI / 2, '255,190,90', 2.2);
+        addShake(X, Y, 5);
+      } });
+      if (u === player) feed('RING PORTAL — step through.');
+      break;
+    }
+    case 'singularity': {
+      capTo(ab.range);
+      const X = tx, Y = ty;
+      u.face = ang;
+      feed(u === player ? 'SINGULARITY — nothing escapes.' : '⚠ SINGULARITY OPENING — GET CLEAR!');
+      const hostile = !(player && u.team === player.team);
+      fxPush({ kind: 'blackhole', x: X, y: Y, life: ab.pull + 0.3, max: ab.pull + 0.3, r: ab.radius, pullT: ab.pull, src: u, seed: Math.random() * 9, c: hostile ? '255,80,60' : '190,120,255' });
+      fxPush({ kind: 'ring', x: X, y: Y - 30, life: .7, max: .7, r: 80, c: '190,120,255' });
+      telegraphs.push({ x: X, y: Y, r: ab.radius, at: time + ab.pull, team: u.team, c: hostile ? '255,80,60' : '190,120,255', born: time, soft: true, cb: () => {
+        aoeDamage(X, Y, ab.radius * 0.75, ab.dmg(l), u);
+        for (const tw of towers) if (tw.hp > 0 && tw.team !== u.team && dist({ x: X, y: Y }, tw) < ab.radius) dealDamage(tw, Math.round(ab.dmg(l) * .5), u);
+        fxPush({ kind: 'flash', x: X, y: Y, life: .3, max: .3, r: ab.radius * .9 });
+        fxPush({ kind: 'column', x: X, y: Y, life: .8, max: .8, r: ab.radius * .9, c: '190,120,255' });
+        fxPush({ kind: 'shock', x: X, y: Y, life: .8, max: .8, r: ab.radius * 1.4, c: '190,120,255' });
+        fxPush({ kind: 'crack', x: X, y: Y, life: 7, max: 7, r: ab.radius * .8, seed: Math.random() * 9 });
+        fxPush({ kind: 'scorch', x: X, y: Y, life: 6, max: 6, r: ab.radius * .7, c: '190,120,255' });
+        for (let i2 = 0; i2 < 60; i2++) { const a2 = Math.random() * TAU, sp = 160 + Math.random() * 480; fxPush({ kind: 'spk', x: X, y: Y, vx: Math.cos(a2) * sp, vy: Math.sin(a2) * sp * 0.6 - 120, life: .5 + Math.random() * .6, max: 1.1, c: i2 % 3 ? '74,217,224' : '235,255,255', w: 3 }); }
+        debris(X, Y, 24);
+        addShake(X, Y, 18); hitstop = Math.max(hitstop, 0.08);
+      } });
+      ultCeremony(u, ab.pull + 1.2, '150,80,255');
       break;
     }
     case 'barrage': {
@@ -1095,6 +1203,7 @@ function stepUnit(u, dt) {
   if (u.kb && time < u.kb.until) { u.x = clamp(u.x + u.kb.vx * dt, 20, WORLD.w - 20); u.y = clamp(u.y + u.kb.vy * dt, 20, WORLD.h - 20); }
   if (u.jump) { u.moving = true; u._movedT = time; return; }                 // airborne: position is driven by tickBastille
   if (u.chan && time < u.chan.until) { u.idleTime = 0; return; }             // channeling / anchored: rooted
+  if (u.bound > time) { u.idleTime = 0; cancelWindup(u); return; }           // golden BINDINGS: rooted + disarmed
   if (u.shT && time > u.shT) u.sh = 0;
   if (u.hasteT && time < u.hasteT === false) u.haste = 1;
   const sp = (u.speed + (u.kind === 'hero' ? itemStat(u, 'ms') : 0)) * (u.hasteT > time ? u.haste : 1) * (u.recallT ? 0 : 1);
@@ -1180,7 +1289,7 @@ function stepUnit(u, dt) {
 function towerHit(u, tw) {
   if (u.role === 'siege') { dealDamage(tw, effDmg(u), u); }   // siege: double damage to towers
   const fac = u.key.split('_')[0];
-  const lrgb = { dawnmarch: '255,233,168', vectra: '159,232,255', mawborn: '255,150,90' }[fac] || '220,235,255';
+  const lrgb = { dawnmarch: '255,233,168', vectra: '159,232,255', mawborn: '255,150,90', titan: '190,120,255' }[fac] || '220,235,255';
   u.face = Math.atan2(tw.y - u.y, tw.x - u.x);
   fxPush({ kind: 'laser', x1: u.x, y1: u.y, x2: tw.x, y2: tw.y - 30, life: .1, max: .1, c: 'rgb(' + lrgb + ')' });
   sparks(tw.x, tw.y - 30, u.face, lrgb, .8);
@@ -1265,6 +1374,7 @@ function heroesThink(dt) {
       else { h.x = c.x + (h.team === 0 ? 90 : -90); h.y = c.y + (Math.random() - .5) * 80; }
       h.order = null; h.target = null;
       if (h.hkey === 'bastille') h._nanoT = time;
+      fxPush({ kind: 'ring', x: h.x, y: h.y - 30, life: 1.2, max: 1.2, r: 62, c: '255,170,60' });   // every legend returns through a golden ring portal
       fxPush({ kind: 'shock', x: h.x, y: h.y, life: .5, max: .5, r: 70, c: TEAM[h.team].light });
     }
     if (!h.dead) {
@@ -1297,7 +1407,7 @@ function heroesThink(dt) {
     else if (foeHero && time >= e.abCd[0]) castAbility(e, 0, foeHero.x, foeHero.y);
     else if (m && time >= e.abCd[1] && e.level >= 2) castAbility(e, 1, m.x, m.y);
     else if (e.hp < e.maxHp * .6 && time >= e.abCd[2] && e.level >= 3) {
-      if (e.hkey === 'bastille' && foeHero) { const a2 = Math.atan2(e.y - foeHero.y, e.x - foeHero.x); castAbility(e, 2, e.x + Math.cos(a2) * 280, e.y + Math.sin(a2) * 280); }
+      if ((e.hkey === 'bastille' || e.hkey === 'korvax') && foeHero) { const a2 = Math.atan2(e.y - foeHero.y, e.x - foeHero.x); castAbility(e, 2, e.x + Math.cos(a2) * 280, e.y + Math.sin(a2) * 280); }
       else castAbility(e, 2, e.x, e.y);
     }
     if (foeHero && foeHero.hp < foeHero.maxHp * .5) { e.target = foeHero; continue; }
@@ -1925,7 +2035,7 @@ function drawUnit(u) {
   u._atkAnim = state === 'attack';
   const sheet = anims[state] || anims.idle; if (!sheet) return;
   // bastille v2 (2026-08-21 Grok mech) is tall-normalised by --group; 165 gives the heavy walker its presence
-  let size = u.kind === 'hero' ? (isSkinned(u) ? ENEMY_SKIN_SIZE[skinKey(u)] || 130 : u.hkey === 'sovereign' ? 240 : u.hkey === 'bastille' ? 165 : 120)
+  let size = u.kind === 'hero' ? (isSkinned(u) ? ENEMY_SKIN_SIZE[skinKey(u)] || 130 : u.hkey === 'sovereign' ? 240 : u.hkey === 'bastille' ? 165 : u.hkey === 'korvax' ? 165 : 120)
     : u.kind === 'monster' ? (u.key === 'mawborn_pitbrute' ? 116 : 96) : 84;
   if (u.kind !== 'hero') size = Math.round(size * (u.vScale || 1));
   const hFlip = (Math.cos(u.face) < 0) !== (u.kind !== 'hero' && u.vMirror && !u.moving && time - u.atkT > 0.5);
@@ -2345,6 +2455,103 @@ function drawFxAll(layer) {
       const g = cx.createRadialGradient(x2, y2, 0, x2, y2, 10 * ZOOM);
       g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(' + f.c + ',0)');
       cx.fillStyle = g; cx.beginPath(); cx.arc(x2, y2, 10 * ZOOM, 0, TAU); cx.fill();
+    } else if (f.kind === 'comet') {
+      const x1 = (f.x1 - camX) * ZOOM, y1 = (f.y1 - camY) * ZOOM, x2 = (f.x2 - camX) * ZOOM, y2 = (f.y2 - camY) * ZOOM;
+      const p = 1 - a, hx = lerp(x1, x2, Math.min(1, p * 1.6)), hy = lerp(y1, y2, Math.min(1, p * 1.6));
+      cx.lineCap = 'round';
+      const g = cx.createLinearGradient(x1, y1, hx, hy);
+      g.addColorStop(0, 'rgba(159,232,255,0)'); g.addColorStop(0.6, 'rgba(159,232,255,' + .5 * a + ')'); g.addColorStop(1, 'rgba(255,255,255,' + .95 * a + ')');
+      cx.strokeStyle = g; cx.lineWidth = 22 * ZOOM; cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(hx, hy); cx.stroke();
+      cx.lineWidth = 6 * ZOOM; cx.strokeStyle = 'rgba(255,255,255,' + a + ')'; cx.beginPath(); cx.moveTo(lerp(x1, hx, 0.5), lerp(y1, hy, 0.5)); cx.lineTo(hx, hy); cx.stroke();
+      const hg = cx.createRadialGradient(hx, hy, 0, hx, hy, 34 * ZOOM);
+      hg.addColorStop(0, 'rgba(255,255,255,' + a + ')'); hg.addColorStop(0.4, 'rgba(159,232,255,' + .7 * a + ')'); hg.addColorStop(1, 'rgba(159,232,255,0)');
+      cx.fillStyle = hg; cx.beginPath(); cx.arc(hx, hy, 34 * ZOOM, 0, TAU); cx.fill();
+    } else if (f.kind === 'tendrils') {
+      const p = 1 - a;
+      cx.save(); cx.translate(sx, sy); cx.lineCap = 'round';
+      for (let k2 = 0; k2 < 7; k2++) {
+        const base = f.seed + k2 / 7 * TAU, L = f.r * (0.5 + 0.5 * Math.sin(f.seed * 3 + k2)) * Math.min(1, p * 3) * ZOOM;
+        cx.strokeStyle = 'rgba(' + f.c + ',' + (0.85 * a) + ')'; cx.lineWidth = (3 - k2 % 2) * ZOOM;
+        cx.beginPath(); cx.moveTo(0, 0);
+        for (let i2 = 1; i2 <= 8; i2++) { const t2 = i2 / 8, aa = base + Math.sin(time * 9 + k2 * 2 + t2 * 5) * 0.55 * t2; cx.lineTo(Math.cos(aa) * L * t2, Math.sin(aa) * L * t2 * 0.6 - 40 * t2 * t2 * ZOOM); }
+        cx.stroke();
+        cx.strokeStyle = 'rgba(255,220,230,' + (0.7 * a) + ')'; cx.lineWidth = 1 * ZOOM; cx.stroke();
+      }
+      cx.restore();
+    } else if (f.kind === 'lightning') {
+      // POWER BLAST: a thick jagged violet bolt, re-jittered every frame, white core, wide bloom, branches
+      const x1 = (f.x1 - camX) * ZOOM, y1 = (f.y1 - camY) * ZOOM, x2 = (f.x2 - camX) * ZOOM, y2 = (f.y2 - camY) * ZOOM;
+      const k = a < 0.85 ? 1 : (1 - a) / 0.15, segs = 14, jit = f.w * 0.28 * ZOOM;
+      const pts = [[x1, y1]]; const nx = -(y2 - y1), ny = (x2 - x1), nl = Math.hypot(nx, ny) || 1;
+      for (let i2 = 1; i2 < segs; i2++) { const t2 = i2 / segs, o = (Math.random() - .5) * 2 * jit * Math.sin(t2 * Math.PI); pts.push([x1 + (x2 - x1) * t2 + nx / nl * o, y1 + (y2 - y1) * t2 + ny / nl * o]); }
+      pts.push([x2, y2]);
+      cx.lineCap = 'round'; cx.lineJoin = 'round';
+      const draw = (wd, col, al) => { cx.globalAlpha = al * k; cx.strokeStyle = col; cx.lineWidth = wd * ZOOM; cx.beginPath(); cx.moveTo(pts[0][0], pts[0][1]); for (const p2 of pts) cx.lineTo(p2[0], p2[1]); cx.stroke(); };
+      draw(f.w * 0.9, 'rgba(' + f.c + ',1)', .22); draw(f.w * 0.36, 'rgba(' + f.c + ',1)', .6); draw(5, '#f6ecff', .95); draw(2, '#ffffff', 1);
+      for (let b2 = 0; b2 < 4; b2++) { const i2 = 2 + Math.floor(Math.random() * (segs - 3)); const [bx, by] = pts[i2]; const ba = Math.atan2(y2 - y1, x2 - x1) + (Math.random() - .5) * 1.6; const bl = (20 + Math.random() * 40) * ZOOM; cx.globalAlpha = .7 * k; cx.strokeStyle = 'rgba(' + f.c + ',1)'; cx.lineWidth = 2 * ZOOM; cx.beginPath(); cx.moveTo(bx, by); cx.lineTo(bx + Math.cos(ba) * bl, by + Math.sin(ba) * bl); cx.stroke(); }
+      const g = cx.createRadialGradient(x2, y2, 0, x2, y2, f.w * 1.2 * ZOOM);
+      g.addColorStop(0, 'rgba(255,255,255,' + .9 * k + ')'); g.addColorStop(0.4, 'rgba(' + f.c + ',' + .6 * k + ')'); g.addColorStop(1, 'rgba(' + f.c + ',0)');
+      cx.globalAlpha = 1; cx.fillStyle = g; cx.beginPath(); cx.arc(x2, y2, f.w * 1.2 * ZOOM, 0, TAU); cx.fill();
+    } else if (f.kind === 'mandala') {
+      // RUNE RINGS: two orange mandalas orbiting the titan, each = concentric runed circles + tick marks, counter-rotating
+      const fade = Math.min(1, a * 4, (f.max - f.life) * 4);
+      for (const side of [-1, 1]) {
+        const oa = time * 1.6 * side + (side > 0 ? 0 : Math.PI);
+        const mx = sx + Math.cos(oa) * 44 * ZOOM, my = sy - 26 * ZOOM + Math.sin(oa) * 16 * ZOOM;
+        cx.save(); cx.translate(mx, my); cx.globalAlpha = fade; cx.rotate(time * 3.2 * side);
+        const R = 22 * ZOOM;
+        cx.strokeStyle = 'rgba(' + f.c + ',0.95)'; cx.lineWidth = 2.2 * ZOOM;
+        cx.beginPath(); cx.arc(0, 0, R, 0, TAU); cx.stroke();
+        cx.lineWidth = 1.2 * ZOOM; cx.beginPath(); cx.arc(0, 0, R * 0.68, 0, TAU); cx.stroke();
+        cx.beginPath(); cx.arc(0, 0, R * 0.38, 0, TAU); cx.stroke();
+        for (let k2 = 0; k2 < 12; k2++) { const aa = k2 / 12 * TAU; cx.beginPath(); cx.moveTo(Math.cos(aa) * R * 0.68, Math.sin(aa) * R * 0.68); cx.lineTo(Math.cos(aa) * R, Math.sin(aa) * R); cx.stroke(); }
+        cx.fillStyle = 'rgba(255,230,170,0.95)'; cx.font = '700 ' + Math.round(8 * ZOOM) + 'px Cinzel, serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+        for (let k2 = 0; k2 < 6; k2++) { const aa = k2 / 6 * TAU + 0.26; cx.fillText('✦', Math.cos(aa) * R * 0.84, Math.sin(aa) * R * 0.84); }
+        const g = cx.createRadialGradient(0, 0, 0, 0, 0, R * 1.5);
+        g.addColorStop(0, 'rgba(255,200,120,0.35)'); g.addColorStop(1, 'rgba(255,150,60,0)');
+        cx.fillStyle = g; cx.beginPath(); cx.arc(0, 0, R * 1.5, 0, TAU); cx.fill();
+        cx.restore();
+      }
+    } else if (f.kind === 'bind') {
+      // golden BINDINGS: 5 glowing cords wrapped around the target, pulsing
+      cx.save(); cx.translate(sx, sy - 18 * ZOOM); cx.strokeStyle = 'rgba(' + f.c + ',' + (0.85 * Math.min(1, a * 3)) + ')'; cx.lineWidth = 2 * ZOOM;
+      for (let k2 = 0; k2 < 5; k2++) { const yy = (-22 + k2 * 11) * ZOOM, ww = (16 + 4 * Math.sin(time * 8 + k2)) * ZOOM; cx.beginPath(); cx.ellipse(0, yy, ww, 4 * ZOOM, 0.18 * (k2 % 2 ? 1 : -1), 0, TAU); cx.stroke(); }
+      cx.restore();
+    } else if (f.kind === 'ring') {
+      // RING PORTAL: a circle of orange sparks spinning, opens then closes
+      const age = f.max - f.life; if (f.delay && age < f.delay) { cx.restore(); continue; }
+      const p = clamp((age - (f.delay || 0)) / Math.max(.01, f.max - (f.delay || 0)), 0, 1), open = Math.sin(p * Math.PI);
+      const R = f.r * open * ZOOM;
+      cx.save(); cx.translate(sx, sy);
+      cx.strokeStyle = 'rgba(' + f.c + ',0.95)'; cx.lineWidth = 3 * ZOOM; cx.beginPath(); cx.ellipse(0, 0, R, R, 0, 0, TAU); cx.stroke();
+      cx.strokeStyle = 'rgba(255,240,200,0.9)'; cx.lineWidth = 1.2 * ZOOM; cx.beginPath(); cx.ellipse(0, 0, R * 0.94, R * 0.94, 0, 0, TAU); cx.stroke();
+      for (let k2 = 0; k2 < 26; k2++) { const aa = k2 / 26 * TAU + time * 7, rr = R * (0.96 + 0.12 * Math.random()); cx.fillStyle = 'rgba(255,220,140,' + (0.6 + 0.4 * Math.random()) + ')'; cx.fillRect(Math.cos(aa) * rr, Math.sin(aa) * rr, 2.2 * ZOOM, 2.2 * ZOOM); if (Math.random() < 0.35) fxPush({ kind: 'spk', x: f.x + Math.cos(aa) * rr / ZOOM, y: f.y + Math.sin(aa) * rr / ZOOM, vx: Math.cos(aa) * 60, vy: Math.sin(aa) * 60 + 40, life: .25, max: .25, c: '255,200,110' }); }
+      const g = cx.createRadialGradient(0, 0, R * 0.6, 0, 0, R * 1.2);
+      g.addColorStop(0, 'rgba(255,170,60,0)'); g.addColorStop(0.7, 'rgba(255,170,60,0.35)'); g.addColorStop(1, 'rgba(255,170,60,0)');
+      cx.fillStyle = g; cx.beginPath(); cx.arc(0, 0, R * 1.2, 0, TAU); cx.fill();
+      cx.restore();
+    } else if (f.kind === 'blackhole') {
+      // SINGULARITY: a black core, violet accretion disc, spiral streaks, everything bending in
+      const age = f.max - f.life, p = clamp(age / f.pullT, 0, 1), R = f.r * ZOOM;
+      cx.save(); cx.translate(sx, sy);
+      cx.globalCompositeOperation = 'source-over';
+      const core = (10 + 26 * p) * ZOOM;
+      const g0 = cx.createRadialGradient(0, 0, 0, 0, 0, core * 2.2);
+      g0.addColorStop(0, 'rgba(0,0,0,0.98)'); g0.addColorStop(0.45, 'rgba(10,0,20,0.9)'); g0.addColorStop(1, 'rgba(10,0,20,0)');
+      cx.fillStyle = g0; cx.beginPath(); cx.ellipse(0, 0, core * 2.2, core * 1.5, 0, 0, TAU); cx.fill();
+      cx.globalCompositeOperation = 'lighter';
+      cx.rotate(time * 2.5);
+      for (let k2 = 0; k2 < 3; k2++) {
+        cx.strokeStyle = 'rgba(' + f.c + ',' + (0.5 + 0.3 * Math.sin(time * 9 + k2)) + ')'; cx.lineWidth = (2 + k2) * ZOOM;
+        cx.beginPath(); for (let i2 = 0; i2 <= 40; i2++) { const t2 = i2 / 40, aa = t2 * TAU * 1.6 + k2 * 2.1, rr = core * 1.1 + (R * 0.9 - core) * (1 - t2); const px = Math.cos(aa) * rr, py = Math.sin(aa) * rr * 0.62; i2 ? cx.lineTo(px, py) : cx.moveTo(px, py); } cx.stroke();
+      }
+      cx.rotate(-time * 2.5);
+      const g1 = cx.createRadialGradient(0, 0, core, 0, 0, core * 1.9);
+      g1.addColorStop(0, 'rgba(' + f.c + ',0.95)'); g1.addColorStop(0.5, 'rgba(' + f.c + ',0.35)'); g1.addColorStop(1, 'rgba(' + f.c + ',0)');
+      cx.fillStyle = g1; cx.beginPath(); cx.ellipse(0, 0, core * 1.9, core * 1.3, 0, 0, TAU); cx.fill();
+      cx.strokeStyle = 'rgba(' + f.c + ',' + (0.35 + 0.25 * p) + ')'; cx.lineWidth = 2 * ZOOM; cx.setLineDash([10 * ZOOM, 8 * ZOOM]); cx.lineDashOffset = time * 120;
+      cx.beginPath(); cx.ellipse(0, 0, R * 1.4 * (1 - 0.25 * p), R * 1.4 * 0.62 * (1 - 0.25 * p), 0, 0, TAU); cx.stroke();
+      cx.restore();
     } else if (f.kind === 'redlance') {
       const x1 = (f.x1 - camX) * ZOOM, y1 = (f.y1 - camY) * ZOOM, x2 = (f.x2 - camX) * ZOOM, y2 = (f.y2 - camY) * ZOOM;
       const k = a < 0.8 ? a / 0.8 : 1;                        // snaps on, then burns out
@@ -2596,6 +2803,36 @@ function frame(ts) {
           if (p >= 1 && !f.landed) { f.landed = true; f.life = 0; if (f.onLand) f.onLand(); }
         }
       }
+      else if (f.kind === 'blackhole') {
+        const age = f.max - f.life;
+        if (age < f.pullT && !NET.guest) {
+          for (const t of units) {
+            if (!foesOf(f.src)(t) || t.kind === 'monster') continue;
+            const d = Math.hypot(t.x - f.x, t.y - f.y); if (d > f.r * 1.4 || d < 6) continue;
+            const k = (1 - d / (f.r * 1.4)) * 0.5 + 0.5, sp = 210 * k * dt;
+            t.x += (f.x - t.x) / d * sp; t.y += (f.y - t.y) / d * sp; t._movedT = time;
+          }
+        }
+        if (Math.random() < dt * 30) { const a2 = Math.random() * TAU, d2 = f.r * (0.6 + Math.random() * 0.8); fxPush({ kind: 'debris', grit: true, x: f.x + Math.cos(a2) * d2, y: f.y + Math.sin(a2) * d2 * 0.6, z: 10 + Math.random() * 40, vx: -Math.cos(a2) * 200 + Math.sin(a2) * 120, vy: (-Math.sin(a2) * 200 - Math.cos(a2) * 120) * 0.6, vz: 40, life: .6, max: .6, rot: Math.random() * 9, s: 2 + Math.random() * 3 }); }
+      }
+      else if (f.kind === 'mandala' && f.follow) {
+        const u2 = f.follow; f.x = u2.x; f.y = u2.y;
+        if (u2.dead || !u2.rings || time > u2.rings.until) { f.life = 0; continue; }
+        const R = u2.rings;
+        if (time >= R.lashT) {
+          R.lashT = time + 0.7;
+          const t2 = nearestEnemy(u2, R.ab.reach);
+          if (t2) {
+            const a2 = Math.atan2(t2.y - u2.y, t2.x - u2.x);
+            fxPush({ kind: 'crescent', x: u2.x, y: u2.y - 10, life: .32, max: .32, r: Math.hypot(t2.x - u2.x, t2.y - u2.y), ang: a2 - 0.55, sweep: 1.1, c: '255,160,70' });
+            fxPush({ kind: 'laser', x1: u2.x, y1: u2.y - 20, x2: t2.x, y2: t2.y, life: .22, max: .22, c: 'rgb(255,170,80)' });
+            dealDamage(t2, R.ab.dmg(R.lvl), u2); onAbilityHit(u2, t2);
+            sparks(t2.x, t2.y, a2, '255,190,100', 1.2);
+            if (!R.boundOnce && t2.kind === 'hero') { R.boundOnce = true; t2.bound = time + 1.3; t2.order = null; t2.target = null; fxPush({ kind: 'bind', x: t2.x, y: t2.y, life: 1.3, max: 1.3, follow: t2, c: '255,200,90' }); if (u2 === player) feed('BOUND — the golden cords hold.'); }
+          }
+        }
+      }
+      else if (f.kind === 'bind' && f.follow) { f.x = f.follow.x; f.y = f.follow.y; if (f.follow.dead) f.life = 0; }
       else if (f.kind === 'fire') {
         f.tickT += dt;
         if (f.tickT >= 0.5 && f.src) { f.tickT = 0;
