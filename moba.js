@@ -218,7 +218,7 @@ const MOTION = {
   liora:     { windup: .32, turn: .18, bob: 3.2, cadence: 9.0,  lean: .055, asRamp: 0,   hitstop: .05 },
   ravener:   { windup: .20, turn: .26, bob: 2.6, cadence: 11.5, lean: .075, asRamp: 0,   hitstop: .045 },
   corwen:    { windup: .25, turn: .10, bob: 5.0, cadence: 6.6,  lean: .038, asRamp: 0,   hitstop: .08 },
-  bastille:  { windup: .30, turn: .16, bob: 3.6, cadence: 8.4,  lean: .062, asRamp: .12, hitstop: .045 },
+  bastille:  { windup: .30, turn: .12, bob: 4.4, cadence: 6.4,  lean: .035, asRamp: .12, hitstop: .045, stomp: true },   // GOLIATH: slower, heavier, piston plant — no hip sway
   sovereign: { windup: .35, turn: .07, bob: 4.2, cadence: 0,    lean: .022, asRamp: 0,   hitstop: .07 },
 };
 const MOTION_DEF = { windup: .22, turn: .22, bob: 3.2, cadence: 9, lean: .055, asRamp: 0, hitstop: .05 };
@@ -1029,7 +1029,20 @@ function tickBastille(dt) {
     }
     if (u.moving && !u.jump) {
       const M = motionOf(u), ph = Math.sin(time * M.cadence + u.vPhase * 6.28);
-      if (u._stepPh !== undefined && (ph > 0) !== (u._stepPh > 0)) fxPush({ kind: 'dust', x: u.x + (ph > 0 ? 9 : -9), y: u.y + 14, life: .4, max: .4, r: 16 });
+      if (u._stepPh !== undefined && (ph > 0) !== (u._stepPh > 0)) {
+        // GOLIATH FOOTFALL (Tee 2026-08-21: "dust looks cheesy — mimic SC Goliath, realistic"): no puff. A hard
+        // piston PLANT = contact shadow under the foot, a few grit pebbles kicked back along the stride, a ground
+        // thump you feel in the camera, and the chassis settling on its hydraulics (drawSheet reads u._plantT).
+        const side = ph > 0 ? 1 : -1, fwd = Math.cos(u.face), lat = Math.sin(u.face);
+        const fx0 = u.x + (-lat * side * 11) + fwd * 4, fy0 = u.y + 17 + fwd * side * 3;
+        fxPush({ kind: 'stomp', x: fx0, y: fy0, life: .42, max: .42, r: 17, ang: u.face });
+        for (let g2 = 0; g2 < 4; g2++) {
+          const sp = 60 + Math.random() * 150;
+          fxPush({ kind: 'debris', grit: true, x: fx0, y: fy0, z: 1, vx: -fwd * sp + (Math.random() - .5) * 70, vy: -lat * sp * 0.5 + (Math.random() - .5) * 40, vz: 50 + Math.random() * 130, life: .3 + Math.random() * .25, max: .55, rot: Math.random() * TAU, s: 1.4 + Math.random() * 1.6 });
+        }
+        u._plantT = time;
+        addShake(u.x, u.y, 0.9);
+      }
       u._stepPh = ph;
     }
   }
@@ -1771,12 +1784,17 @@ function drawSheet(u, sheet, size, hFlip, alpha) {
     cx.translate(0, Math.sin(time * 1.5 + ph) * M.bob * ZOOM);
     cx.rotate(Math.sin(time * 0.9 + ph) * 0.03);
   } else if (u.moving) {
-    cx.translate(0, -Math.abs(Math.sin(time * M.cadence + ph)) * M.bob * ZOOM);
-    cx.rotate(Math.sin(time * M.cadence + ph) * M.lean);
+    const sn = Math.sin(time * M.cadence + ph);
+    // stomp archetype: spends the stride UP and drops FAST onto the plant (|sin|^0.55) — a piston, not a bounce
+    const lift = M.stomp ? Math.pow(Math.abs(sn), 0.55) : Math.abs(sn);
+    cx.translate(0, -lift * M.bob * ZOOM);
+    cx.rotate(sn * M.lean);
   } else {
     cx.translate(0, Math.sin(time * 2.3 + ph) * (M.bob * 0.34) * ZOOM);
     cx.rotate(Math.sin(time * 1.4 + ph) * 0.018);
   }
+  const plAge = time - (u._plantT || -9);                  // GOLIATH hydraulic settle on each footfall
+  if (plAge >= 0 && plAge < 0.16) { const k = Math.sin(plAge / 0.16 * Math.PI); cx.translate(0, 2.2 * k * ZOOM); cx.scale(1 + 0.035 * k, 1 - 0.05 * k); }
   const fidAge = time - (u._fidget || -9);                 // idle one-shot flourish
   if (fidAge >= 0 && fidAge < 0.75) {
     const fs = Math.sin(fidAge / 0.75 * Math.PI);
@@ -1946,7 +1964,7 @@ function drawTower(tw) {
     cx.fillRect(bx, by, w * clamp(tw.hp / tw.maxHp, 0, 1), h);
   }
 }
-const FX_GROUND = { scorch: 1, crack: 1, fire: 1, dust: 1, cone: 1, reticle: 1, designator: 1, casing: 1 };
+const FX_GROUND = { scorch: 1, crack: 1, fire: 1, dust: 1, cone: 1, reticle: 1, designator: 1, casing: 1, stomp: 1 };
 function drawFxAll(layer) {
   const GROUND = layer === 'ground', AIR = layer !== 'ground';
   // telegraphs (under everything bright)
@@ -2052,6 +2070,18 @@ function drawFxAll(layer) {
       const col = f.dark ? '40,34,30' : f.lite ? '225,225,230' : '170,170,175';
       g.addColorStop(0, 'rgba(' + col + ',' + (f.lite ? 0.55 : 0.42) * a + ')'); g.addColorStop(1, 'rgba(' + col + ',0)');
       cx.fillStyle = g; cx.beginPath(); cx.arc(sx, sy, rr, 0, TAU); cx.fill();
+    } else if (f.kind === 'stomp') {
+      cx.globalCompositeOperation = 'source-over';
+      const p = 1 - a;
+      // contact shadow: sharp and dark at the plant, softening out
+      const g = cx.createRadialGradient(sx, sy, 0, sx, sy, f.r * (1 + 0.4 * p) * ZOOM);
+      g.addColorStop(0, 'rgba(8,6,4,' + 0.55 * a + ')'); g.addColorStop(0.6, 'rgba(8,6,4,' + 0.25 * a + ')'); g.addColorStop(1, 'rgba(8,6,4,0)');
+      cx.fillStyle = g; cx.beginPath(); cx.ellipse(sx, sy, f.r * (1 + 0.4 * p) * ZOOM, f.r * 0.45 * (1 + 0.4 * p) * ZOOM, 0, 0, TAU); cx.fill();
+      // low grit drift trailing the stride — thin, tan, barely there (this is soil, not a cartoon cloud)
+      const dx = -Math.cos(f.ang) * 18 * p * ZOOM, dy = -Math.sin(f.ang) * 6 * p * ZOOM;
+      const g2 = cx.createRadialGradient(sx + dx, sy + dy, 0, sx + dx, sy + dy, f.r * (0.6 + 0.9 * p) * ZOOM);
+      g2.addColorStop(0, 'rgba(150,128,96,' + 0.16 * a + ')'); g2.addColorStop(1, 'rgba(150,128,96,0)');
+      cx.fillStyle = g2; cx.beginPath(); cx.ellipse(sx + dx, sy + dy, f.r * (0.6 + 0.9 * p) * ZOOM, f.r * 0.3 * (0.6 + 0.9 * p) * ZOOM, 0, 0, TAU); cx.fill();
     } else if (f.kind === 'dust') {
       cx.globalCompositeOperation = 'source-over';
       const p = 1 - a, rr = f.r * (0.4 + 0.8 * p) * ZOOM;
@@ -2064,8 +2094,8 @@ function drawFxAll(layer) {
       cx.globalCompositeOperation = 'source-over'; cx.globalAlpha = Math.min(1, a * 2);
       cx.fillStyle = 'rgba(0,0,0,0.35)'; cx.beginPath(); cx.ellipse(sx, sy, f.s * 0.9 * ZOOM, f.s * 0.4 * ZOOM, 0, 0, TAU); cx.fill();
       cx.translate(sx, sy - f.z * 0.9 * ZOOM); cx.rotate(f.rot);
-      cx.fillStyle = '#2a2622'; cx.fillRect(-f.s * ZOOM / 2, -f.s * ZOOM / 2, f.s * ZOOM, f.s * ZOOM * 0.7);
-      cx.fillStyle = 'rgba(255,140,60,' + 0.8 * a + ')'; cx.fillRect(-f.s * ZOOM / 2, -f.s * ZOOM / 2, f.s * ZOOM * 0.45, f.s * ZOOM * 0.3);
+      cx.fillStyle = f.grit ? '#3b3228' : '#2a2622'; cx.fillRect(-f.s * ZOOM / 2, -f.s * ZOOM / 2, f.s * ZOOM, f.s * ZOOM * 0.7);
+      if (!f.grit) { cx.fillStyle = 'rgba(255,140,60,' + 0.8 * a + ')'; cx.fillRect(-f.s * ZOOM / 2, -f.s * ZOOM / 2, f.s * ZOOM * 0.45, f.s * ZOOM * 0.3); }
     } else if (f.kind === 'fireball') {
       const age = f.max - f.life, p = age / f.max, rr = f.r * (0.35 + 0.65 * Math.sqrt(p)) * ZOOM;
       for (let k2 = 0; k2 < 4; k2++) {
