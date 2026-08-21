@@ -190,7 +190,7 @@ const HEROES = {
     abilities: [
       { k: 'Q', name: 'GATLING SALVO', icon: '◎', type: 'gatling', cd: 5, range: 620, dur: 1.5, rate: 0.11, spread: 0.12, dmg: l => 22 + 8 * l },
       { k: 'W', name: 'ROCKET SWARM', icon: '♨', type: 'rockets', cd: 5, range: 640, radius: 150, count: 10, dmg: l => 24 + 8 * l },
-      { k: 'E', name: 'PLASMA BLADES', icon: '⚔', type: 'blades', cd: 5, dur: 5, reach: 130, gap: 0.42, haste: 1.3, dmg: l => 34 + 11 * l },   // Tee 2026-08-21: dual energy-blade melee combos, Jedi-like, for 5s
+      { k: 'E', name: 'LASER SWEEP', icon: '⟳', type: 'sweep', cd: 5, dur: 1.6, range: 420, dmg: l => 80 + 26 * l },   // Tee 2026-08-21: '360 laser sweep like Iron Man' — two forearm lasers sweep a full circle, cutting everything they cross
       { k: 'R', name: 'ORBITAL BARRAGE', icon: '☠', type: 'orbital', cd: 5, range: 800, radius: 260, shells: 10, anchor: 1.3, gap: 0.34, dmg: l => 80 + 34 * l, ult: true },
     ],
   },
@@ -910,6 +910,18 @@ function castAbility(u, i, tx, ty, force) {
       if (u === player) feed('PLASMA BLADES — ignited.');
       break;
     }
+    case 'sweep': {
+      // LASER SWEEP: Goliath plants, both forearm emitters fire continuous red lasers and rotate one full turn; every enemy the
+      // beams cross is cut (once per beam pass) and shoved outward; the beams leave a burning ring on the ground.
+      u.face = ang;
+      u.chan = { kind: 'sweep', t0: time, until: time + ab.dur, ang0: ang, ab, lvl: l, pass: Math.floor(Math.random() * 1e6), scorchT: 0 };
+      u.order = null; u.target = null; u.amove = null; cancelWindup(u);
+      fxPush({ kind: 'flash', x: u.x - 14, y: u.y - 12, life: .16, max: .16, r: 22 }); fxPush({ kind: 'flash', x: u.x + 14, y: u.y - 12, life: .16, max: .16, r: 22 });
+      fxPush({ kind: 'dust', x: u.x, y: u.y, life: .5, max: .5, r: 40 });
+      ultCeremony(u, ab.dur, '255,90,60');
+      if (u === player) feed('LASER SWEEP — clear the room.');
+      break;
+    }
     case 'orbital': {
       capTo(ab.range);
       const X = tx, Y = ty;
@@ -1205,6 +1217,30 @@ function tickBastille(dt) {
           u._recoil = time;
           if (c.n % 3 === 0) addShake(u.x, u.y, 1.8);
         }
+      } else if (c.kind === 'sweep') {
+        const p = clamp((time - c.t0) / c.ab.dur, 0, 1), ramp = Math.min(1, p / 0.12);                 // 0.2s spin-up then steady turn
+        const turn = Math.pow(p, 0.9) * TAU;
+        const prev = c.prevTurn === undefined ? 0 : c.prevTurn; c.prevTurn = turn;
+        c.curAng = c.ang0 + turn; u.face = c.curAng;
+        for (const t of units) {
+          if (!foesOf(u)(t)) continue;
+          const d = Math.hypot(t.x - u.x, t.y - u.y); if (d > c.ab.range + t.r || d < 10) continue;
+          const ta = Math.atan2(t.y - u.y, t.x - u.x);
+          for (const beam of [0, Math.PI]) {                    // two beams, 180° apart
+            let rel = ((ta - c.ang0 - beam) % TAU + TAU) % TAU;  // target angle measured from the beam's start
+            if (rel > prev && rel <= turn && t._sweepPass !== c.pass + beam) {   // the beam crossed this target this tick
+              t._sweepPass = c.pass + beam;
+              dealDamage(t, c.ab.dmg(c.lvl), u); onAbilityHit(u, t);
+              t.kb = { vx: Math.cos(ta) * 300, vy: Math.sin(ta) * 300, until: time + 0.16 };
+              sparks(t.x, t.y - 10, ta, '255,90,70', 1.6); fxPush({ kind: 'flash', x: t.x, y: t.y - 10, life: .1, max: .1, r: 22 }); debris(t.x, t.y, 2);
+              hitstop = Math.max(hitstop, 0.035);
+            }
+          }
+        }
+        c.scorchT += dt;
+        if (c.scorchT > 0.04 && ramp >= 1) { c.scorchT = 0;     // burning ring left by the beam tips + mid-beam
+          for (const beam of [0, Math.PI]) for (const fr of [0.55, 1.0]) { const bx = u.x + Math.cos(c.curAng + beam) * c.ab.range * fr, by = u.y + Math.sin(c.curAng + beam) * c.ab.range * fr * 0.62; fxPush({ kind: 'scorch', x: bx, y: by, life: 3.2, max: 3.2, r: 16, c: '255,120,60' }); if (Math.random() < 0.5) fxPush({ kind: 'ember', x: bx, y: by, vx: (Math.random() - .5) * 40, vy: -40 - Math.random() * 60, life: 1 + Math.random(), max: 2, seed: Math.random() * 9 }); } }
+        if (Math.random() < dt * 6) addShake(u.x, u.y, 2.2);
       } else if (c.kind === 'anchor') {
         if (Math.random() < dt * 14) fxPush({ kind: 'spk', x: u.x + (Math.random() - .5) * 30, y: u.y + 10, vx: (Math.random() - .5) * 60, vy: -90 - Math.random() * 60, life: .3, max: .3, c: '255,190,120' });
       }
@@ -2132,6 +2168,24 @@ function drawMechPresence(u, sx, sy, size) {
     const og = cx.createRadialGradient(sx, sy + size * 0.3 * ZOOM, 0, sx, sy + size * 0.3 * ZOOM, size * 0.5 * ZOOM);
     og.addColorStop(0, 'rgba(159,232,255,0.30)'); og.addColorStop(1, 'rgba(159,232,255,0)');
     cx.fillStyle = og; cx.beginPath(); cx.ellipse(sx, sy + size * 0.3 * ZOOM, size * 0.5 * ZOOM, size * 0.2 * ZOOM, 0, 0, TAU); cx.fill();
+  }
+  // LASER SWEEP — two continuous forearm lasers rotating, white core / red bloom, hot ground contact at the tips
+  if (u.chan && u.chan.kind === 'sweep' && u.chan.curAng !== undefined) {
+    const c = u.chan, p = clamp((time - c.t0) / c.ab.dur, 0, 1), ramp = Math.min(1, p / 0.12), fadeO = p > 0.93 ? (1 - p) / 0.07 : 1, al = ramp * fadeO;
+    cx.lineCap = 'round';
+    for (const beam of [0, Math.PI]) {
+      const ba = c.curAng + beam, k = beam ? 1 : -1;
+      const hx = sx + (-side * k * 14 + fwd * 4) * ZOOM, hy = sy - 12 * ZOOM + (fwd * k * 5) * ZOOM;
+      const L = c.ab.range * ramp * ZOOM, ex = hx + Math.cos(ba) * L, ey = hy + Math.sin(ba) * L * 0.62;
+      const fl = 0.85 + 0.15 * Math.sin(time * 60 + beam);
+      cx.globalAlpha = 0.3 * al * fl; cx.strokeStyle = 'rgb(255,40,30)'; cx.lineWidth = 18 * ZOOM; cx.beginPath(); cx.moveTo(hx, hy); cx.lineTo(ex, ey); cx.stroke();
+      cx.globalAlpha = 0.8 * al; cx.strokeStyle = 'rgb(255,80,55)'; cx.lineWidth = 6 * ZOOM; cx.beginPath(); cx.moveTo(hx, hy); cx.lineTo(ex, ey); cx.stroke();
+      cx.globalAlpha = al; cx.strokeStyle = '#fff5f0'; cx.lineWidth = 2.2 * ZOOM; cx.beginPath(); cx.moveTo(hx, hy); cx.lineTo(ex, ey); cx.stroke();
+      for (const [gx2, gy2, gr] of [[hx, hy, 12 * ZOOM], [ex, ey, 26 * ZOOM]]) { const g = cx.createRadialGradient(gx2, gy2, 0, gx2, gy2, gr); g.addColorStop(0, 'rgba(255,255,250,' + 0.9 * al + ')'); g.addColorStop(0.4, 'rgba(255,90,60,' + 0.6 * al + ')'); g.addColorStop(1, 'rgba(255,40,30,0)'); cx.fillStyle = g; cx.beginPath(); cx.arc(gx2, gy2, gr, 0, TAU); cx.fill(); }
+      // motion-blur ghost of the beam a few degrees behind
+      cx.globalAlpha = 0.18 * al; cx.strokeStyle = 'rgb(255,60,40)'; cx.lineWidth = 10 * ZOOM; cx.beginPath(); cx.moveTo(hx, hy); cx.lineTo(hx + Math.cos(ba - 0.18) * L, hy + Math.sin(ba - 0.18) * L * 0.62); cx.stroke();
+    }
+    cx.globalAlpha = 1;
   }
   // PLASMA BLADES — two energy blades in the hands, cyan + red, swing with the combo, constant hum glow
   if (u.blades && time < u.blades.until) {
