@@ -163,7 +163,7 @@ const HEROES = {
   bastille: {
     key: 'vectra_bastille', name: 'GOLIATH', role: 'WALKER ACE', fac: 'vectra', icon: '⚙',   // renamed BASTILLE→GOLIATH (Tee 2026-08-21); hkey/asset key stays 'bastille'
     desc: 'Piloted twin-cannon walker. A gatling salvo that saws through a lane, a homing rocket swarm, thruster-vault mobility — and an orbital barrage that turns the ground to fire.',
-    hp: 600, hpG: 72, dmg: 46, dmgG: 6, range: 300, cd: 0.62, speed: 168, r: 18,
+    hp: 920, hpG: 104, dmg: 46, dmgG: 6, range: 300, cd: 0.62, speed: 168, r: 18,   // Tee 2026-08-21: 'hard to kill' (+53% HP) + half cooldowns
     /* BASTILLE KIT v2 (Tee 2026-08-21: "each ability like a Diablo ability — max impressive").
      * Every ability is a committed, telegraphed, physical event: anticipation → payload → aftermath.
      *  Q GATLING SALVO  — 0.22s barrel spin-up, then a rooted 1.1s cone-spray of tracers (cancel by moving).
@@ -172,10 +172,10 @@ const HEROES = {
      *  R ORBITAL BARRAGE — anchor-down + laser designator + targeting reticle, then 12 shells rain from orbit; the
      *                      final shell cracks the ground, knocks enemies back and leaves a burning zone that slows. */
     abilities: [
-      { k: 'Q', name: 'GATLING SALVO', icon: '◎', type: 'gatling', cd: 7, range: 620, dur: 1.1, rate: 0.06, spread: 0.14, dmg: l => 16 + 6 * l },
-      { k: 'W', name: 'ROCKET SWARM', icon: '♨', type: 'rockets', cd: 11, range: 640, radius: 150, count: 7, dmg: l => 34 + 12 * l },
-      { k: 'E', name: 'THRUSTER VAULT', icon: '⏩', type: 'vault', cd: 12, range: 300, dur: 3.5, haste: 1.4, radius: 110, dmg: l => 40 + 14 * l },
-      { k: 'R', name: 'ORBITAL BARRAGE', icon: '☠', type: 'orbital', cd: 70, range: 800, radius: 260, shells: 12, anchor: 0.9, dmg: l => 70 + 30 * l, ult: true },
+      { k: 'Q', name: 'GATLING SALVO', icon: '◎', type: 'gatling', cd: 3.5, range: 620, dur: 1.5, rate: 0.11, spread: 0.12, dmg: l => 22 + 8 * l },
+      { k: 'W', name: 'ROCKET SWARM', icon: '♨', type: 'rockets', cd: 5.5, range: 640, radius: 150, count: 6, dmg: l => 38 + 13 * l },
+      { k: 'E', name: 'THRUSTER VAULT', icon: '⏩', type: 'vault', cd: 6, range: 300, dur: 3.5, haste: 1.4, radius: 110, jumpT: 0.72, jumpH: 135, dmg: l => 40 + 14 * l },
+      { k: 'R', name: 'ORBITAL BARRAGE', icon: '☠', type: 'orbital', cd: 35, range: 800, radius: 260, shells: 10, anchor: 1.3, gap: 0.34, dmg: l => 80 + 34 * l, ult: true },
     ],
   },
   sovereign: {
@@ -800,9 +800,9 @@ function castAbility(u, i, tx, ty, force) {
     /* ======================= BASTILLE v2 — Diablo-grade kit ======================= */
     case 'gatling': {
       u.face = ang;
-      u.chan = { kind: 'gat', t0: time, until: time + ab.dur, fireT: time + 0.22, ang, ab, lvl: l, n: 0 };
+      u.chan = { kind: 'gat', t0: time, until: time + ab.dur, fireT: time + 0.38, ang, ab, lvl: l, n: 0 };
       u.order = null; u.target = null; u.amove = null; cancelWindup(u);
-      fxPush({ kind: 'spinup', x: u.x, y: u.y, life: .26, max: .26, r: 30, c: lrgb, follow: u, rot: ang });
+      fxPush({ kind: 'spinup', x: u.x, y: u.y, life: .4, max: .4, r: 30, c: lrgb, follow: u, rot: ang });
       fxPush({ kind: 'cone', x: u.x, y: u.y, life: ab.dur, max: ab.dur, r: ab.range, ang, half: ab.spread + 0.05, c: lrgb, follow: u });
       fxPush({ kind: 'dust', x: u.x, y: u.y, life: .5, max: .5, r: 36 });
       if (u === player) feed('GATLING SALVO — barrels hot.');
@@ -815,18 +815,18 @@ function castAbility(u, i, tx, ty, force) {
       fxPush({ kind: 'dust', x: u.x, y: u.y, life: .45, max: .45, r: 30 });
       fxPush({ kind: 'mflash', x: u.x + Math.cos(ang) * 20, y: u.y - 16, rot: ang - 0.7, life: .22, max: .22, c: '255,170,90', r: 22 });
       fxPush({ kind: 'shock', x: u.x, y: u.y - 10, life: .3, max: .3, r: 36, c: '255,190,120' });
-      telegraphs.push({ x: X, y: Y, r: ab.radius, at: time + 1.3, team: u.team, c: '255,170,90', born: time, soft: true, cb: () => {} });
+      telegraphs.push({ x: X, y: Y, r: ab.radius, at: time + 2.4, team: u.team, c: '255,170,90', born: time, soft: true, cb: () => {} });
       for (let k = 0; k < ab.count; k++) {
         const last = k === ab.count - 1;
-        const rr = last ? 0 : Math.sqrt(Math.random()) * ab.radius * 0.85, ra = Math.random() * TAU;
-        const ix = X + Math.cos(ra) * rr, iy = Y + Math.sin(ra) * rr;
-        const dur = 0.8 + k * 0.07;
+        // landing spots fan across the zone (deterministic spread, last one dead-centre)
+        const fa = (k / (ab.count - 1) - 0.5) * 2.2, rr = last ? 0 : ab.radius * (0.45 + 0.4 * ((k * 7) % 3) / 2);
+        const ix = X + Math.cos(ang + fa) * rr * 0.9, iy = Y + Math.sin(ang + fa) * rr * 0.6;
         const side = k % 2 ? 1 : -1;
-        const sx0 = u.x + Math.cos(ang) * 12 + Math.cos(ang + Math.PI / 2) * side * 13, sy0 = u.y - 20;
-        const bend = side * (70 + Math.random() * 130);
-        const apex = { x: (sx0 + ix) / 2 + Math.cos(ang + Math.PI / 2) * bend, y: Math.min(sy0, iy) - 150 - Math.random() * 90 };
+        const sx0 = u.x + Math.cos(ang) * 10 + Math.cos(ang + Math.PI / 2) * side * 14, sy0 = u.y - 26;   // shoulder pods
+        const flight = 1.35 + k * 0.05, delay = k * 0.14;
+        const bend = side * (40 + k * 22);               // lateral fan: each missile peels out to its own lane
         const blastR = last ? 120 : 74, dmgK = last ? 2 : 1;
-        fxPush({ kind: 'missile', x: sx0, y: sy0, x0: sx0, y0: sy0, ax: apex.x, ay: apex.y, x2: ix, y2: iy, life: dur + k * 0.06, max: dur + k * 0.06, delay: k * 0.06, c: '255,170,90', smokeT: 0,
+        fxPush({ kind: 'missile', x: sx0, y: sy0, x0: sx0, y0: sy0, x2: ix, y2: iy, bend, alt: 150 + k * 14, life: flight + delay, max: flight + delay, delay, c: '255,170,90', smokeT: 0, idx: k,
           onLand: () => {
             aoeDamage(ix, iy, blastR, ab.dmg(l) * dmgK, u);
             for (const tw of towers) if (tw.hp > 0 && tw.team !== u.team && dist({ x: ix, y: iy }, tw) < blastR + 20) dealDamage(tw, Math.round(ab.dmg(l) * 0.5 * dmgK), u);
@@ -839,14 +839,14 @@ function castAbility(u, i, tx, ty, force) {
     case 'vault': {
       capTo(ab.range);
       const X = tx, Y = ty;
-      u.jump = { x0: u.x, y0: u.y, x1: X, y1: Y, t0: time, dur: 0.42, h: 95, ab, lvl: l };
+      u.jump = { x0: u.x, y0: u.y, x1: X, y1: Y, t0: time, dur: ab.jumpT || 0.42, h: ab.jumpH || 95, ab, lvl: l };
       u.order = null; u.target = null; u.amove = null; u.face = ang; cancelWindup(u); u.chan = null;
       u.haste = ab.haste; u.hasteT = time + ab.dur; u._thrustT = time + ab.dur;
       fxPush({ kind: 'dust', x: u.x, y: u.y, life: .55, max: .55, r: 46 });
       fxPush({ kind: 'shock', x: u.x, y: u.y, life: .3, max: .3, r: 54, c: lrgb });
       fxPush({ kind: 'scorch', x: u.x, y: u.y, life: 2.2, max: 2.2, r: 30, c: lrgb });
       fxPush({ kind: 'flash', x: u.x, y: u.y + 8, life: .14, max: .14, r: 30 });
-      for (let g2 = 1; g2 <= 4; g2++) fxPush({ kind: 'ghost', key: u.key, x: lerp(u.x, X, g2 / 5), y: lerp(u.y, Y, g2 / 5) - Math.sin(g2 / 5 * Math.PI) * 95, face: ang, life: .3 + g2 * .05, max: .3 + g2 * .05, size: 150 });
+      // (no ghost afterimages — a jump-jet is a single readable body in the air, not a blur)
       addShake(u.x, u.y, 3);
       if (u === player) feed('THRUSTER VAULT — overdrive engaged.');
       break;
@@ -863,20 +863,20 @@ function castAbility(u, i, tx, ty, force) {
       const hostile = !(player && u.team === player.team);
       const rc = hostile ? '255,80,60' : lrgb;
       fxPush({ kind: 'designator', x: u.x, y: u.y, x2: X, y2: Y, life: ab.anchor + 0.3, max: ab.anchor + 0.3, follow: u, c: rc });
-      const total = ab.anchor + 0.35 + ab.shells * 0.17 + 0.7;
+      const total = ab.anchor + 0.45 + ab.shells * ab.gap + 1.2;
       fxPush({ kind: 'reticle', x: X, y: Y, life: total, max: total, r: ab.radius, c: rc, lock: ab.anchor, t0: time });
       for (let s2 = 0; s2 < ab.shells; s2++) {
         const last = s2 === ab.shells - 1;
         const rr = last ? 0 : Math.sqrt(Math.random()) * ab.radius * 0.9, ra = Math.random() * TAU;
         const bx = X + Math.cos(ra) * rr, by = Y + Math.sin(ra) * rr;
-        const at = time + ab.anchor + 0.35 + s2 * 0.17 + (last ? 0.45 : 0);
+        const at = time + ab.anchor + 0.45 + s2 * ab.gap + (last ? 0.7 : 0);
         const br = last ? 150 : 85;
-        telegraphs.push({ x: bx, y: by, r: br, at, team: u.team, c: rc, born: at - 0.55, shell: true, big: last, cb: () => {
+        telegraphs.push({ x: bx, y: by, r: br, at, team: u.team, c: rc, born: at - 0.9, shell: true, big: last, cb: () => {
           aoeDamage(bx, by, br, Math.round(ab.dmg(l) * (last ? 2.2 : 1)), u);
           for (const tw of towers) if (tw.hp > 0 && tw.team !== u.team && dist({ x: bx, y: by }, tw) < br + 10) dealDamage(tw, Math.round(ab.dmg(l) * .6), u);
           shellImpact(bx, by, br, last, u);
         } });
-        fxPush({ kind: 'shellfall', x: bx, y: by, life: at - time, max: at - time, fallT: 0.42, c: '255,210,150' });
+        fxPush({ kind: 'shellfall', x: bx, y: by, life: at - time, max: at - time, fallT: 0.8, big: last, c: '255,210,150' });
       }
       ultCeremony(u, total, '255,140,60');
       break;
@@ -981,7 +981,7 @@ function tickBastille(dt) {
           const a = c.ang + (Math.random() - .5) * 2 * c.ab.spread;
           const px = Math.cos(c.ang + Math.PI / 2) * side * 9, py = Math.sin(c.ang + Math.PI / 2) * side * 9;
           const mx = u.x + Math.cos(c.ang) * 28 + px, my = u.y + Math.sin(c.ang) * 28 + py - 14;
-          projectiles.push({ x: mx, y: my, ang: a, sp: 1500, left: c.ab.range, dmg: c.ab.dmg(c.lvl), team: u.team, src: u, c: '255,205,130', tracer: true });
+          projectiles.push({ x: mx, y: my, ang: a, sp: 980, left: c.ab.range, dmg: c.ab.dmg(c.lvl), team: u.team, src: u, c: '255,205,130', tracer: true });
           fxPush({ kind: 'mflash', x: mx, y: my, rot: a, life: .08, max: .08, c: '255,190,110', r: 19 });
           fxPush({ kind: 'casing', x: u.x - Math.cos(c.ang) * 2 + px, y: u.y - 12, vx: -Math.cos(c.ang) * 50 + (Math.random() - .5) * 60 + Math.cos(c.ang + Math.PI / 2) * side * 110, vy: -170 - Math.random() * 90, life: .7, max: .7, rot: Math.random() * TAU, rv: (Math.random() - .5) * 20 });
           if (c.n % 4 === 0) fxPush({ kind: 'smoke', x: mx, y: my, vx: Math.cos(c.ang) * 30, vy: -22, life: .55, max: .55, r: 7, grow: 26 });
@@ -1907,6 +1907,21 @@ function drawUnit(u) {
     cx.beginPath(); cx.moveTo(0, 8); cx.lineTo(-7, -4); cx.lineTo(7, -4); cx.closePath(); cx.fill(); cx.stroke();
     cx.restore();
   }
+  if (u.jump && lift > 4) {                                  // THRUSTERS: two flickering jet cones under the airborne mech
+    cx.save(); cx.globalCompositeOperation = 'lighter';
+    for (const k of [-1, 1]) {
+      const jx = sx + k * 13 * ZOOM, jy = sy - lift * ZOOM + size * 0.26 * ZOOM;
+      const fl = 0.7 + 0.3 * Math.sin(time * 60 + k);
+      const len = (34 + 26 * clamp(lift / 120, 0, 1)) * fl * ZOOM;
+      const g = cx.createLinearGradient(jx, jy, jx, jy + len);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.25, 'rgba(159,232,255,0.85)'); g.addColorStop(0.6, 'rgba(255,170,80,0.55)'); g.addColorStop(1, 'rgba(255,120,40,0)');
+      cx.fillStyle = g; cx.beginPath(); cx.moveTo(jx - 5 * ZOOM, jy); cx.lineTo(jx + 5 * ZOOM, jy); cx.lineTo(jx + 1.5 * ZOOM, jy + len); cx.lineTo(jx - 1.5 * ZOOM, jy + len); cx.closePath(); cx.fill();
+      const hg = cx.createRadialGradient(jx, jy, 0, jx, jy, 9 * ZOOM);
+      hg.addColorStop(0, 'rgba(255,255,255,0.9)'); hg.addColorStop(1, 'rgba(159,232,255,0)');
+      cx.fillStyle = hg; cx.beginPath(); cx.arc(jx, jy, 9 * ZOOM, 0, TAU); cx.fill();
+    }
+    cx.restore();
+  }
   drawSheet(u, sheet, size, hFlip);
   if (u.hkey === 'bastille') drawMechPresence(u, sx, sy - lift * ZOOM, size);
   u.moving = false;   // consumed by the next tick. MUST be reset AFTER drawSheet — clearing it
@@ -2008,6 +2023,12 @@ function drawFxAll(layer) {
     const hg = cx.createRadialGradient(sx, sy, 0, sx, sy, hr);
     hg.addColorStop(0, 'rgba(255,255,255,0.95)'); hg.addColorStop(0.5, 'rgba(' + p.c + ',0.6)'); hg.addColorStop(1, 'rgba(' + p.c + ',0)');
     cx.fillStyle = hg; cx.beginPath(); cx.arc(sx, sy, hr, 0, TAU); cx.fill();
+    if (p.tracer) {                                            // the round itself: opaque brass capsule, readable at speed
+      cx.globalCompositeOperation = 'source-over'; cx.translate(sx, sy); cx.rotate(p.ang);
+      cx.fillStyle = '#3a2a12'; cx.fillRect(-7 * ZOOM, -2.4 * ZOOM, 12 * ZOOM, 4.8 * ZOOM);
+      cx.fillStyle = '#ffcf6a'; cx.fillRect(-6 * ZOOM, -1.6 * ZOOM, 10 * ZOOM, 3.2 * ZOOM);
+      cx.fillStyle = '#fff6d8'; cx.beginPath(); cx.moveTo(4 * ZOOM, -1.6 * ZOOM); cx.lineTo(7 * ZOOM, 0); cx.lineTo(4 * ZOOM, 1.6 * ZOOM); cx.closePath(); cx.fill();
+    }
     cx.restore();
   }
   // sheet fx
@@ -2156,36 +2177,63 @@ function drawFxAll(layer) {
       cx.fillStyle = g; cx.beginPath(); cx.arc(0, 0, 18 * ZOOM * (0.4 + p), 0, TAU); cx.fill();
     } else if (f.kind === 'missile') {
       if (f.p === undefined) { cx.restore(); continue; }
-      const sc = 1.7 * (1 + 0.5 * Math.sin(f.p * Math.PI));
+      const sc = 1.5 + 0.9 * clamp(f.altv / (f.alt || 1), 0, 1);          // closer to camera when high
       const ang = Math.atan2(f.vy || 0, f.vx || 1);
-      // ground shadow under the arc is meaningless in screen-space; the scale pulse sells the height instead
-      cx.translate(sx, sy); cx.rotate(ang);
-      const tl = 30 * sc * ZOOM;
-      const g = cx.createLinearGradient(0, 0, -tl, 0);
-      g.addColorStop(0, 'rgba(255,255,240,0.95)'); g.addColorStop(0.3, 'rgba(255,180,90,0.85)'); g.addColorStop(1, 'rgba(255,120,40,0)');
-      cx.strokeStyle = g; cx.lineWidth = 5 * sc * ZOOM; cx.lineCap = 'round';
-      cx.beginPath(); cx.moveTo(0, 0); cx.lineTo(-tl, 0); cx.stroke();
-      cx.globalCompositeOperation = 'source-over';
-      cx.fillStyle = '#c8ccd2'; cx.fillRect(-2 * sc * ZOOM, -2.2 * sc * ZOOM, 11 * sc * ZOOM, 4.4 * sc * ZOOM);
-      cx.fillStyle = '#ff7a3a'; cx.beginPath(); cx.moveTo(9 * sc * ZOOM, -2.2 * sc * ZOOM); cx.lineTo(14 * sc * ZOOM, 0); cx.lineTo(9 * sc * ZOOM, 2.2 * sc * ZOOM); cx.closePath(); cx.fill();
+      // ground shadow travels the real ground path — the eye reads altitude from the gap
+      cx.globalCompositeOperation = 'source-over'; cx.globalAlpha = 1;
+      const gsx = (f.gx - camX) * ZOOM, gsy = (f.gy - camY) * ZOOM;
+      cx.fillStyle = 'rgba(0,0,0,' + (0.34 - 0.2 * clamp(f.altv / (f.alt || 1), 0, 1)) + ')';
+      cx.beginPath(); cx.ellipse(gsx, gsy, 7 * ZOOM, 3 * ZOOM, ang, 0, TAU); cx.fill();
+      // exhaust flame (additive) — flickers
       cx.globalCompositeOperation = 'lighter';
-      const hg = cx.createRadialGradient(-1 * ZOOM, 0, 0, -1 * ZOOM, 0, 10 * sc * ZOOM);
+      cx.translate(sx, sy); cx.rotate(ang);
+      const fl = 0.75 + 0.25 * Math.sin(time * 50 + (f.idx || 0));
+      const tl = 34 * sc * fl * ZOOM;
+      const g = cx.createLinearGradient(-6 * sc * ZOOM, 0, -tl, 0);
+      g.addColorStop(0, 'rgba(255,255,240,0.95)'); g.addColorStop(0.25, 'rgba(255,190,90,0.85)'); g.addColorStop(1, 'rgba(255,120,40,0)');
+      cx.strokeStyle = g; cx.lineWidth = 5.5 * sc * ZOOM; cx.lineCap = 'round';
+      cx.beginPath(); cx.moveTo(-6 * sc * ZOOM, 0); cx.lineTo(-tl, 0); cx.stroke();
+      const hg = cx.createRadialGradient(-6 * sc * ZOOM, 0, 0, -6 * sc * ZOOM, 0, 9 * sc * ZOOM);
       hg.addColorStop(0, 'rgba(255,255,255,0.9)'); hg.addColorStop(1, 'rgba(255,170,80,0)');
-      cx.fillStyle = hg; cx.beginPath(); cx.arc(-1 * ZOOM, 0, 10 * sc * ZOOM, 0, TAU); cx.fill();
+      cx.fillStyle = hg; cx.beginPath(); cx.arc(-6 * sc * ZOOM, 0, 9 * sc * ZOOM, 0, TAU); cx.fill();
+      // the missile itself — opaque, hard-edged, readable: gunmetal body, dark belly line, orange warhead, tail fins
+      cx.globalCompositeOperation = 'source-over';
+      const L = 16 * sc * ZOOM, Wd = 4.6 * sc * ZOOM;
+      cx.fillStyle = '#2a2e36'; cx.fillRect(-L * 0.5 - 0.8 * ZOOM, -Wd / 2 - 0.8 * ZOOM, L + 1.6 * ZOOM, Wd + 1.6 * ZOOM);   // dark outline
+      cx.fillStyle = '#b9c0ca'; cx.fillRect(-L * 0.5, -Wd / 2, L, Wd);
+      cx.fillStyle = '#7d8590'; cx.fillRect(-L * 0.5, 0, L, Wd / 2);                                   // belly shade
+      cx.fillStyle = '#ff6a2a'; cx.beginPath(); cx.moveTo(L * 0.5, -Wd / 2); cx.lineTo(L * 0.5 + 6 * sc * ZOOM, 0); cx.lineTo(L * 0.5, Wd / 2); cx.closePath(); cx.fill();
+      cx.fillStyle = '#ffd27a'; cx.fillRect(L * 0.1, -Wd / 2, 2 * sc * ZOOM, Wd);                        // hazard band
+      cx.fillStyle = '#3a3f48';
+      cx.beginPath(); cx.moveTo(-L * 0.5, -Wd / 2); cx.lineTo(-L * 0.5 - 4 * sc * ZOOM, -Wd * 1.1); cx.lineTo(-L * 0.3, -Wd / 2); cx.closePath(); cx.fill();
+      cx.beginPath(); cx.moveTo(-L * 0.5, Wd / 2); cx.lineTo(-L * 0.5 - 4 * sc * ZOOM, Wd * 1.1); cx.lineTo(-L * 0.3, Wd / 2); cx.closePath(); cx.fill();
     } else if (f.kind === 'shellfall') {
       if (f.life > f.fallT) { cx.restore(); continue; }
-      const p = 1 - f.life / f.fallT;                         // 0 = entering from the sky, 1 = impact
-      const ox = 150 * ZOOM, oy = 560 * ZOOM;
+      const p = Math.pow(1 - f.life / f.fallT, 1.6);          // 0 = entering from the sky, 1 = impact (accelerates in)
+      const sc = f.big ? 1.5 : 1.1;
+      const ox = 120 * ZOOM, oy = 620 * ZOOM;
       const hx = sx + ox * (1 - p), hy = sy - oy * (1 - p);
-      const tx2 = hx + ox * 0.28, ty2 = hy - oy * 0.28;
-      cx.globalAlpha = 1;
+      // ground shadow sharpens as the shell comes in — the eye reads where it lands
+      cx.globalCompositeOperation = 'source-over'; cx.globalAlpha = 1;
+      cx.fillStyle = 'rgba(0,0,0,' + (0.1 + 0.35 * p) + ')'; cx.beginPath(); cx.ellipse(sx, sy, (10 + 6 * p) * sc * ZOOM, (4 + 3 * p) * sc * ZOOM, 0, 0, TAU); cx.fill();
+      // heat trail (additive)
+      cx.globalCompositeOperation = 'lighter';
+      const tx2 = hx + ox * 0.35, ty2 = hy - oy * 0.35;
       const g = cx.createLinearGradient(hx, hy, tx2, ty2);
-      g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.4, 'rgba(' + f.c + ',0.7)'); g.addColorStop(1, 'rgba(' + f.c + ',0)');
-      cx.strokeStyle = g; cx.lineWidth = 4 * ZOOM; cx.lineCap = 'round';
+      g.addColorStop(0, 'rgba(255,255,255,0.9)'); g.addColorStop(0.3, 'rgba(' + f.c + ',0.6)'); g.addColorStop(1, 'rgba(' + f.c + ',0)');
+      cx.strokeStyle = g; cx.lineWidth = 5 * sc * ZOOM; cx.lineCap = 'round';
       cx.beginPath(); cx.moveTo(hx, hy); cx.lineTo(tx2, ty2); cx.stroke();
-      const hg = cx.createRadialGradient(hx, hy, 0, hx, hy, 12 * ZOOM);
-      hg.addColorStop(0, 'rgba(255,255,255,1)'); hg.addColorStop(0.5, 'rgba(' + f.c + ',0.7)'); hg.addColorStop(1, 'rgba(' + f.c + ',0)');
-      cx.fillStyle = hg; cx.beginPath(); cx.arc(hx, hy, 12 * ZOOM, 0, TAU); cx.fill();
+      const hg = cx.createRadialGradient(hx, hy, 0, hx, hy, 11 * sc * ZOOM);
+      hg.addColorStop(0, 'rgba(255,255,255,0.9)'); hg.addColorStop(0.5, 'rgba(' + f.c + ',0.6)'); hg.addColorStop(1, 'rgba(' + f.c + ',0)');
+      cx.fillStyle = hg; cx.beginPath(); cx.arc(hx, hy, 11 * sc * ZOOM, 0, TAU); cx.fill();
+      // the SHELL: opaque dark ordnance with an orange tip, angled along the fall line
+      cx.globalCompositeOperation = 'source-over';
+      cx.translate(hx, hy); cx.rotate(Math.atan2(oy, -ox));
+      const L = 18 * sc * ZOOM, Wd = 6 * sc * ZOOM;
+      cx.fillStyle = '#1d2026'; cx.fillRect(-L * 0.6 - ZOOM, -Wd / 2 - ZOOM, L + 2 * ZOOM, Wd + 2 * ZOOM);
+      cx.fillStyle = '#565c66'; cx.fillRect(-L * 0.6, -Wd / 2, L, Wd);
+      cx.fillStyle = '#2f343c'; cx.fillRect(-L * 0.6, 0, L, Wd / 2);
+      cx.fillStyle = '#ff7a2a'; cx.beginPath(); cx.moveTo(L * 0.4, -Wd / 2); cx.lineTo(L * 0.4 + 7 * sc * ZOOM, 0); cx.lineTo(L * 0.4, Wd / 2); cx.closePath(); cx.fill();
     } else if (f.kind === 'reticle') {
       const age = time - f.t0, locked = age >= f.lock, pl = clamp(age / f.lock, 0, 1);
       const fade = Math.min(1, a * 3);
@@ -2435,11 +2483,17 @@ function frame(ts) {
       else if (f.kind === 'missile') {
         const age = f.max - f.life, p = clamp((age - f.delay) / (f.max - f.delay), 0, 1);
         if (age >= f.delay) {
-          const q = 1 - p, px = q * q * f.x0 + 2 * q * p * f.ax + p * p * f.x2, py = q * q * f.y0 + 2 * q * p * f.ay + p * p * f.y2;
-          f.vx = (px - f.x) / Math.max(dt, .001); f.vy = (py - f.y) / Math.max(dt, .001); f.x = px; f.y = py; f.p = p;
+          if (!f.launched) { f.launched = true; fxPush({ kind: 'mflash', x: f.x0, y: f.y0, rot: -Math.PI / 2 + (f.bend > 0 ? 0.5 : -0.5), life: .16, max: .16, c: '255,190,120', r: 16 }); fxPush({ kind: 'smoke', x: f.x0, y: f.y0, vx: (Math.random() - .5) * 30, vy: -30, life: .9, max: .9, r: 9, grow: 30, lite: true }); }
+          // GROUND PATH (straight launch→impact, bowed sideways into its own lane) + ALTITUDE (rises fast, hangs, dives)
+          const ang0 = Math.atan2(f.y2 - f.y0, f.x2 - f.x0);
+          const gx = lerp(f.x0, f.x2, p) + Math.cos(ang0 + Math.PI / 2) * f.bend * Math.sin(p * Math.PI);
+          const gy = lerp(f.y0, f.y2, p) + Math.sin(ang0 + Math.PI / 2) * f.bend * Math.sin(p * Math.PI) * 0.6;
+          const alt = f.alt * Math.sin(Math.pow(p, 0.8) * Math.PI);
+          const px = gx, py = gy - alt;
+          f.vx = (px - f.x) / Math.max(dt, .001); f.vy = (py - f.y) / Math.max(dt, .001); f.x = px; f.y = py; f.p = p; f.gx = gx; f.gy = gy; f.altv = alt;
           f.smokeT += dt;
-          if (f.smokeT > 0.024) { f.smokeT = 0; fxPush({ kind: 'smoke', x: px, y: py, vx: (Math.random() - .5) * 20, vy: -8, life: .85, max: .85, r: 8, grow: 34, lite: true }); }
-          if (Math.random() < 0.5) fxPush({ kind: 'spk', x: px, y: py, vx: -f.vx * 0.18 + (Math.random() - .5) * 40, vy: -f.vy * 0.18 + (Math.random() - .5) * 40, life: .16, max: .16, c: '255,190,110' });
+          if (f.smokeT > 0.045) { f.smokeT = 0; fxPush({ kind: 'smoke', x: px, y: py, vx: (Math.random() - .5) * 14, vy: -6, life: 1.3, max: 1.3, r: 7, grow: 26, lite: true }); }
+          if (Math.random() < 0.2) fxPush({ kind: 'spk', x: px, y: py, vx: -f.vx * 0.15 + (Math.random() - .5) * 30, vy: -f.vy * 0.15 + (Math.random() - .5) * 30, life: .14, max: .14, c: '255,190,110' });
           if (p >= 1 && !f.landed) { f.landed = true; f.life = 0; if (f.onLand) f.onLand(); }
         }
       }
