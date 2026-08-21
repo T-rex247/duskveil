@@ -173,7 +173,7 @@ const HEROES = {
      *                      final shell cracks the ground, knocks enemies back and leaves a burning zone that slows. */
     abilities: [
       { k: 'Q', name: 'GATLING SALVO', icon: '◎', type: 'gatling', cd: 3.5, range: 620, dur: 1.5, rate: 0.11, spread: 0.12, dmg: l => 22 + 8 * l },
-      { k: 'W', name: 'ROCKET SWARM', icon: '♨', type: 'rockets', cd: 5.5, range: 640, radius: 150, count: 6, dmg: l => 38 + 13 * l },
+      { k: 'W', name: 'ROCKET SWARM', icon: '♨', type: 'rockets', cd: 5.5, range: 640, radius: 150, count: 10, dmg: l => 24 + 8 * l },
       { k: 'E', name: 'THRUSTER VAULT', icon: '⏩', type: 'vault', cd: 6, range: 300, dur: 3.5, haste: 1.4, radius: 110, jumpT: 0.72, jumpH: 135, dmg: l => 40 + 14 * l },
       { k: 'R', name: 'ORBITAL BARRAGE', icon: '☠', type: 'orbital', cd: 35, range: 800, radius: 260, shells: 10, anchor: 1.3, gap: 0.34, dmg: l => 80 + 34 * l, ult: true },
     ],
@@ -816,22 +816,25 @@ function castAbility(u, i, tx, ty, force) {
       fxPush({ kind: 'mflash', x: u.x + Math.cos(ang) * 20, y: u.y - 16, rot: ang - 0.7, life: .22, max: .22, c: '255,170,90', r: 22 });
       fxPush({ kind: 'shock', x: u.x, y: u.y - 10, life: .3, max: .3, r: 36, c: '255,190,120' });
       telegraphs.push({ x: X, y: Y, r: ab.radius, at: time + 2.4, team: u.team, c: '255,170,90', born: time, soft: true, cb: () => {} });
+      // PIN MISSILES (Tee 2026-08-21: "smaller pin missiles, silver, homing"): a swarm of thin silver darts, each
+      // one locks a live target inside the zone and steers onto it while it dives; small sharp hits, no fireworks.
+      const tg = units.filter(t => foesOf(u)(t) && Math.hypot(t.x - X, t.y - Y) < ab.radius + 60).sort((a2, b2) => (a2.kind === 'hero' ? 0 : 1) - (b2.kind === 'hero' ? 0 : 1) || Math.hypot(a2.x - X, a2.y - Y) - Math.hypot(b2.x - X, b2.y - Y));
       for (let k = 0; k < ab.count; k++) {
-        const last = k === ab.count - 1;
-        // landing spots fan across the zone (deterministic spread, last one dead-centre)
-        const fa = (k / (ab.count - 1) - 0.5) * 2.2, rr = last ? 0 : ab.radius * (0.45 + 0.4 * ((k * 7) % 3) / 2);
-        const ix = X + Math.cos(ang + fa) * rr * 0.9, iy = Y + Math.sin(ang + fa) * rr * 0.6;
+        const tgt = tg.length ? tg[k % tg.length] : null;
+        const fa = (k / (ab.count - 1) - 0.5) * 2.0, rr = ab.radius * (0.2 + 0.6 * ((k * 7) % 4) / 3);
+        const ix = tgt ? tgt.x : X + Math.cos(ang + fa) * rr * 0.9, iy = tgt ? tgt.y : Y + Math.sin(ang + fa) * rr * 0.6;
         const side = k % 2 ? 1 : -1;
         const sx0 = u.x + Math.cos(ang) * 10 + Math.cos(ang + Math.PI / 2) * side * 14, sy0 = u.y - 26;   // shoulder pods
-        const flight = 1.35 + k * 0.05, delay = k * 0.14;
-        const bend = side * (40 + k * 22);               // lateral fan: each missile peels out to its own lane
-        const blastR = last ? 120 : 74, dmgK = last ? 2 : 1;
-        fxPush({ kind: 'missile', x: sx0, y: sy0, x0: sx0, y0: sy0, x2: ix, y2: iy, bend, alt: 150 + k * 14, life: flight + delay, max: flight + delay, delay, c: '255,170,90', smokeT: 0, idx: k,
-          onLand: () => {
-            aoeDamage(ix, iy, blastR, ab.dmg(l) * dmgK, u);
-            for (const tw of towers) if (tw.hp > 0 && tw.team !== u.team && dist({ x: ix, y: iy }, tw) < blastR + 20) dealDamage(tw, Math.round(ab.dmg(l) * 0.5 * dmgK), u);
-            rocketBlast(ix, iy, blastR, last);
-          } });
+        const flight = 1.15 + (k % 3) * 0.08, delay = k * 0.09;
+        const bend = side * (30 + (k >> 1) * 18);        // lateral fan: each dart peels out to its own lane
+        const blastR = 48;
+        const m = { kind: 'missile', pin: true, tgt, x: sx0, y: sy0, x0: sx0, y0: sy0, x2: ix, y2: iy, bend, alt: 120 + (k % 4) * 12, life: flight + delay, max: flight + delay, delay, c: '255,190,120', smokeT: 0, idx: k };
+        m.onLand = () => {
+          aoeDamage(m.x2, m.y2, blastR, ab.dmg(l), u);
+          for (const tw of towers) if (tw.hp > 0 && tw.team !== u.team && dist({ x: m.x2, y: m.y2 }, tw) < blastR + 20) dealDamage(tw, Math.round(ab.dmg(l) * 0.5), u);
+          pinHit(m.x2, m.y2);
+        };
+        fxPush(m);
       }
       if (u === player) feed('ROCKET SWARM away.');
       break;
@@ -934,6 +937,15 @@ function debris(x, y, n) {
 }
 function smokeBurst(x, y, r, n, dark) {
   for (let i = 0; i < n; i++) fxPush({ kind: 'smoke', x: x + (Math.random() - .5) * r * .6, y: y + (Math.random() - .5) * r * .3, vx: (Math.random() - .5) * 40, vy: -40 - Math.random() * 50, life: 1 + Math.random() * .4, max: 1.4, r: r * .22, grow: r * .6, dark });
+}
+function pinHit(x, y) {
+  fxPush({ kind: 'flash', x, y, life: .12, max: .12, r: 26 });
+  fxPush({ kind: 'fireball', x, y, life: .26, max: .26, r: 30, seed: Math.random() * 9 });
+  fxPush({ kind: 'shock', x, y, life: .26, max: .26, r: 36, c: '255,200,140' });
+  fxPush({ kind: 'scorch', x, y, life: 1.6, max: 1.6, r: 18, c: '255,150,80' });
+  sparks(x, y, -Math.PI / 2, '255,210,150', 1.2);
+  debris(x, y, 3);
+  addShake(x, y, 2.2);
 }
 function rocketBlast(x, y, r, big) {
   fxPush({ kind: 'flash', x, y, life: .18, max: .18, r: r * .8 });
@@ -2175,6 +2187,32 @@ function drawFxAll(layer) {
       const g = cx.createRadialGradient(0, 0, 0, 0, 0, 18 * ZOOM * (0.4 + p));
       g.addColorStop(0, 'rgba(255,255,255,' + 0.7 * p + ')'); g.addColorStop(1, 'rgba(' + f.c + ',0)');
       cx.fillStyle = g; cx.beginPath(); cx.arc(0, 0, 18 * ZOOM * (0.4 + p), 0, TAU); cx.fill();
+    } else if (f.kind === 'missile' && f.pin) {
+      if (f.p === undefined) { cx.restore(); continue; }
+      const hi = clamp(f.altv / (f.alt || 1), 0, 1), sc = 0.9 + 0.45 * hi;
+      const ang = Math.atan2(f.vy || 0, f.vx || 1);
+      cx.globalCompositeOperation = 'source-over'; cx.globalAlpha = 1;
+      const gsx = (f.gx - camX) * ZOOM, gsy = (f.gy - camY) * ZOOM;
+      cx.fillStyle = 'rgba(0,0,0,' + (0.3 - 0.18 * hi) + ')'; cx.beginPath(); cx.ellipse(gsx, gsy, 4.5 * ZOOM, 2 * ZOOM, ang, 0, TAU); cx.fill();
+      cx.globalCompositeOperation = 'lighter';
+      cx.translate(sx, sy); cx.rotate(ang);
+      const fl = 0.7 + 0.3 * Math.sin(time * 70 + (f.idx || 0));
+      const tl = 16 * sc * fl * ZOOM;
+      const g = cx.createLinearGradient(-5 * sc * ZOOM, 0, -tl, 0);
+      g.addColorStop(0, 'rgba(255,255,245,0.95)'); g.addColorStop(0.3, 'rgba(255,200,120,0.8)'); g.addColorStop(1, 'rgba(255,140,60,0)');
+      cx.strokeStyle = g; cx.lineWidth = 2.6 * sc * ZOOM; cx.lineCap = 'round';
+      cx.beginPath(); cx.moveTo(-5 * sc * ZOOM, 0); cx.lineTo(-tl, 0); cx.stroke();
+      // the dart: thin polished-silver needle with a dark keel line and a tiny red tip
+      cx.globalCompositeOperation = 'source-over';
+      const L = 13 * sc * ZOOM, Wd = 2.4 * sc * ZOOM;
+      cx.fillStyle = '#2b3038'; cx.fillRect(-L * 0.5 - 0.6 * ZOOM, -Wd / 2 - 0.6 * ZOOM, L + 1.2 * ZOOM, Wd + 1.2 * ZOOM);
+      cx.fillStyle = '#e6eaf0'; cx.fillRect(-L * 0.5, -Wd / 2, L, Wd);
+      cx.fillStyle = '#8e97a3'; cx.fillRect(-L * 0.5, 0, L, Wd / 2);
+      cx.fillStyle = '#ffffff'; cx.fillRect(-L * 0.5, -Wd / 2, L, Wd * 0.22);                          // specular edge
+      cx.fillStyle = '#ff4a3a'; cx.beginPath(); cx.moveTo(L * 0.5, -Wd / 2); cx.lineTo(L * 0.5 + 4 * sc * ZOOM, 0); cx.lineTo(L * 0.5, Wd / 2); cx.closePath(); cx.fill();
+      cx.fillStyle = '#4a515c';
+      cx.beginPath(); cx.moveTo(-L * 0.5, -Wd / 2); cx.lineTo(-L * 0.5 - 2.5 * sc * ZOOM, -Wd * 1.3); cx.lineTo(-L * 0.32, -Wd / 2); cx.closePath(); cx.fill();
+      cx.beginPath(); cx.moveTo(-L * 0.5, Wd / 2); cx.lineTo(-L * 0.5 - 2.5 * sc * ZOOM, Wd * 1.3); cx.lineTo(-L * 0.32, Wd / 2); cx.closePath(); cx.fill();
     } else if (f.kind === 'missile') {
       if (f.p === undefined) { cx.restore(); continue; }
       const sc = 1.5 + 0.9 * clamp(f.altv / (f.alt || 1), 0, 1);          // closer to camera when high
@@ -2483,7 +2521,8 @@ function frame(ts) {
       else if (f.kind === 'missile') {
         const age = f.max - f.life, p = clamp((age - f.delay) / (f.max - f.delay), 0, 1);
         if (age >= f.delay) {
-          if (!f.launched) { f.launched = true; fxPush({ kind: 'mflash', x: f.x0, y: f.y0, rot: -Math.PI / 2 + (f.bend > 0 ? 0.5 : -0.5), life: .16, max: .16, c: '255,190,120', r: 16 }); fxPush({ kind: 'smoke', x: f.x0, y: f.y0, vx: (Math.random() - .5) * 30, vy: -30, life: .9, max: .9, r: 9, grow: 30, lite: true }); }
+          if (!f.launched) { f.launched = true; fxPush({ kind: 'mflash', x: f.x0, y: f.y0, rot: -Math.PI / 2 + (f.bend > 0 ? 0.5 : -0.5), life: .14, max: .14, c: '255,190,120', r: f.pin ? 9 : 16 }); fxPush({ kind: 'smoke', x: f.x0, y: f.y0, vx: (Math.random() - .5) * 30, vy: -30, life: .9, max: .9, r: 9, grow: 30, lite: true }); }
+          if (f.tgt && !f.tgt.dead && f.tgt.hp > 0) { const k = Math.min(1, dt * (2 + 10 * p)); f.x2 += (f.tgt.x - f.x2) * k; f.y2 += (f.tgt.y - f.y2) * k; }   // HOMING: tightens as it dives
           // GROUND PATH (straight launch→impact, bowed sideways into its own lane) + ALTITUDE (rises fast, hangs, dives)
           const ang0 = Math.atan2(f.y2 - f.y0, f.x2 - f.x0);
           const gx = lerp(f.x0, f.x2, p) + Math.cos(ang0 + Math.PI / 2) * f.bend * Math.sin(p * Math.PI);
@@ -2492,8 +2531,9 @@ function frame(ts) {
           const px = gx, py = gy - alt;
           f.vx = (px - f.x) / Math.max(dt, .001); f.vy = (py - f.y) / Math.max(dt, .001); f.x = px; f.y = py; f.p = p; f.gx = gx; f.gy = gy; f.altv = alt;
           f.smokeT += dt;
-          if (f.smokeT > 0.045) { f.smokeT = 0; fxPush({ kind: 'smoke', x: px, y: py, vx: (Math.random() - .5) * 14, vy: -6, life: 1.3, max: 1.3, r: 7, grow: 26, lite: true }); }
-          if (Math.random() < 0.2) fxPush({ kind: 'spk', x: px, y: py, vx: -f.vx * 0.15 + (Math.random() - .5) * 30, vy: -f.vy * 0.15 + (Math.random() - .5) * 30, life: .14, max: .14, c: '255,190,110' });
+          if (f.pin) { if (f.smokeT > 0.02) { f.smokeT = 0; fxPush({ kind: 'smoke', x: px, y: py, vx: (Math.random() - .5) * 6, vy: -3, life: .9, max: .9, r: 3, grow: 9, lite: true }); } }
+          else if (f.smokeT > 0.045) { f.smokeT = 0; fxPush({ kind: 'smoke', x: px, y: py, vx: (Math.random() - .5) * 14, vy: -6, life: 1.3, max: 1.3, r: 7, grow: 26, lite: true }); }
+          if (!f.pin && Math.random() < 0.2) fxPush({ kind: 'spk', x: px, y: py, vx: -f.vx * 0.15 + (Math.random() - .5) * 30, vy: -f.vy * 0.15 + (Math.random() - .5) * 30, life: .14, max: .14, c: '255,190,110' });
           if (p >= 1 && !f.landed) { f.landed = true; f.life = 0; if (f.onLand) f.onLand(); }
         }
       }
