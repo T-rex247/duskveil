@@ -33,6 +33,8 @@ function resize() {
   cv.width = VW * DPR; cv.height = VH * DPR;
   ZOOM = clamp(Math.min(VW / 1250, VH / 800), 0.62, 1.12);
   if (VW < 700) ZOOM = Math.max(ZOOM, 0.78);
+  const zq = typeof location !== 'undefined' && (location.search.match(/[?&]zoom=([0-9.]+)/) || [])[1];   // cinematic/QA override (trailer capture)
+  if (zq) ZOOM = clamp(parseFloat(zq), 0.5, 3);
 }
 addEventListener('resize', resize); resize();
 
@@ -1545,6 +1547,7 @@ function heroesThink(dt) {
   for (const e of heroes) {
     if ((e === player && !DEMOF) || e.dead) continue;   // demo drives the player too
     if (e === player && window.DV_QA && DV_QA.noAI) continue;   // QA hook: captures drive the player themselves
+    if (window.DV_QA && DV_QA.noAllAI) continue;                 // QA/cinematic hook: nobody casts unless the script says so
     if (e.human && e !== player) continue;               // a guest commands this hero
     if (time < (e.aiT || 0)) continue;
     e.aiT = time + 0.5;
