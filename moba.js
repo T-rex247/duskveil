@@ -179,7 +179,7 @@ const HEROES = {
     ],
   },
   sovereign: {
-    key: 'vectra_sovereign', name: 'SOVEREIGN', role: 'SKY DREADNOUGHT', fac: 'vectra', icon: '⚓',
+    key: 'vectra_sovereign', name: 'BATTLECRUISER', role: 'SKY DREADNOUGHT', fac: 'vectra', icon: '⚓',   // renamed SOVEREIGN→BATTLECRUISER (Tee 2026-08-21); hkey/assets stay 'sovereign'
     desc: 'A VECTRA capital ship answering the front in person. Broadsides, a point-defense screen, an overdrive ram — and a spinal lance that splits the field.',
     hp: 940, hpG: 105, dmg: 58, dmgG: 8, range: 340, cd: 1.1, speed: 132, r: 24,
     abilities: [
@@ -539,6 +539,14 @@ function fireFx(u, t) {
   const lrgb = { dawnmarch: '255,233,168', vectra: '159,232,255', mawborn: '255,150,90' }[fac] || '220,235,255';
   const melee = u.range <= 80;
   const mx = u.x + Math.cos(u.face) * (u.r + 6), my = u.y + Math.sin(u.face) * (u.r + 6);
+  if (u.hkey === 'bastille') {                              // GOLIATH: red emitter LANCE from the forearm — white core, red bloom
+    const ex = u.x + Math.cos(u.face) * 24 - Math.sin(u.face) * 10, ey = u.y + Math.sin(u.face) * 24 * 0.4 + Math.cos(u.face) * 10 * 0.4 - 14;
+    fxPush({ kind: 'redlance', x1: ex, y1: ey, x2: t.x, y2: t.y, life: .24, max: .24 });
+    fxPush({ kind: 'flash', x: ex, y: ey, life: .1, max: .1, r: 12 });
+    fxPush({ kind: 'shock', x: t.x, y: t.y, life: .22, max: .22, r: 22, c: '255,70,60' });
+    sparks(t.x, t.y, u.face, '255,90,70', 1.1);
+    return;
+  }
   if (!melee) {
     fxPush({ kind: 'laser', x1: mx, y1: my, x2: t.x, y2: t.y, life: .24, max: .24, c: 'rgb(' + lrgb + ')' });
     fxPush({ kind: 'mflash', x: mx, y: my, rot: u.face, life: .18, max: .18, c: lrgb, r: u.kind === 'hero' ? 18 : 12 });
@@ -1033,6 +1041,15 @@ function tickBastille(dt) {
       }
     }
     if (u.hkey !== 'bastille') continue;
+    const nAge = time - (u._nanoT === undefined ? -9 : u._nanoT);
+    if (nAge >= 0 && nAge < 1.0) {                           // nanite motes stream IN toward the forming plates
+      for (let k2 = 0; k2 < 3; k2++) {
+        const a = Math.random() * TAU, d = 70 + Math.random() * 70;
+        const px = u.x + Math.cos(a) * d, py = u.y - 30 + Math.sin(a) * d * 0.6;
+        fxPush({ kind: 'spk', x: px, y: py, vx: (u.x - px) * 4, vy: (u.y - 30 + (0.5 - nAge) * 60 - py) * 4, life: .22, max: .22, c: k2 ? '74,217,224' : '235,255,255', w: 2.2 });
+      }
+      if (nAge < 0.05 && !u._nanoRing) { u._nanoRing = true; fxPush({ kind: 'shock', x: u.x, y: u.y, life: .6, max: .6, r: 80, c: '74,217,224' }); }
+    } else u._nanoRing = false;
     // OVERDRIVE exhaust trail + mech footfall dust (the walker reads HEAVY and HOT)
     if (u._thrustT > time && u.moving && !u.jump) {
       u._exT = (u._exT || 0) + dt;
@@ -1240,6 +1257,7 @@ function heroesThink(dt) {
       if (DEMOF) { h.x = ALTAR.x + (h.team === 0 ? -1 : 1) * (250 + Math.random() * 80); h.y = ALTAR.y + (Math.random() - .5) * 260; }
       else { h.x = c.x + (h.team === 0 ? 90 : -90); h.y = c.y + (Math.random() - .5) * 80; }
       h.order = null; h.target = null;
+      if (h.hkey === 'bastille') h._nanoT = time;
       fxPush({ kind: 'shock', x: h.x, y: h.y, life: .5, max: .5, r: 70, c: TEAM[h.team].light });
     }
     if (!h.dead) {
@@ -1831,7 +1849,25 @@ function drawSheet(u, sheet, size, hFlip, alpha) {
   }
   const pop = hitAge < 0.22 ? 1 + 0.08 * (1 - hitAge / 0.22) : 1;
   cx.scale(pop, pop);
-  cx.drawImage(sheet.img, fi * sheet.fw, 0, sheet.fw, sheet.fh, -size / 2, -size / 2, size, size);
+  const nanoAge = time - (u._nanoT === undefined ? -9 : u._nanoT);
+  if (u.hkey === 'bastille' && nanoAge >= 0 && nanoAge < 1.25) {   // NANITE MORPH — plates flow up from the feet, seam of light at the front
+    const r = Math.pow(clamp(nanoAge / 1.0, 0, 1), 0.8);
+    const top = size / 2 - size * r;
+    cx.save(); cx.beginPath(); cx.rect(-size / 2, top, size, size * r + 1); cx.clip();
+    cx.drawImage(sheet.img, fi * sheet.fw, 0, sheet.fw, sheet.fh, -size / 2, -size / 2, size, size);
+    if (nanoAge < 1.0) {                                     // fresh plates glow teal as they lock in
+      cx.globalCompositeOperation = 'lighter'; cx.globalAlpha = 0.55 * (1 - r);
+      cx.drawImage(sheet.img, fi * sheet.fw, 0, sheet.fw, sheet.fh, -size / 2, -size / 2, size, size);
+    }
+    cx.restore();
+    if (r < 1) {
+      cx.save(); cx.globalCompositeOperation = 'lighter';
+      const sg = cx.createLinearGradient(0, top - 6, 0, top + 6);
+      sg.addColorStop(0, 'rgba(74,217,224,0)'); sg.addColorStop(0.5, 'rgba(235,255,255,0.95)'); sg.addColorStop(1, 'rgba(74,217,224,0)');
+      cx.fillStyle = sg; cx.fillRect(-size * 0.36, top - 6, size * 0.72, 12);
+      cx.restore();
+    }
+  } else cx.drawImage(sheet.img, fi * sheet.fw, 0, sheet.fw, sheet.fh, -size / 2, -size / 2, size, size);
   if (hitAge < 0.22 && hitAge >= 0) {
     cx.globalCompositeOperation = 'lighter';
     cx.globalAlpha = 0.8 * (1 - hitAge / 0.22);
@@ -2301,6 +2337,21 @@ function drawFxAll(layer) {
       const g = cx.createRadialGradient(x2, y2, 0, x2, y2, 10 * ZOOM);
       g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(' + f.c + ',0)');
       cx.fillStyle = g; cx.beginPath(); cx.arc(x2, y2, 10 * ZOOM, 0, TAU); cx.fill();
+    } else if (f.kind === 'redlance') {
+      const x1 = (f.x1 - camX) * ZOOM, y1 = (f.y1 - camY) * ZOOM, x2 = (f.x2 - camX) * ZOOM, y2 = (f.y2 - camY) * ZOOM;
+      const k = a < 0.8 ? a / 0.8 : 1;                        // snaps on, then burns out
+      cx.lineCap = 'round';
+      cx.globalAlpha = k * .28; cx.strokeStyle = 'rgb(255,40,30)'; cx.lineWidth = 16 * ZOOM;
+      cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
+      cx.globalAlpha = k * .75; cx.strokeStyle = 'rgb(255,70,50)'; cx.lineWidth = 5 * ZOOM;
+      cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
+      cx.globalAlpha = k; cx.strokeStyle = '#fff4f0'; cx.lineWidth = 1.6 * ZOOM;
+      cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2); cx.stroke();
+      for (const [ex, ey, er] of [[x1, y1, 12 * ZOOM], [x2, y2, 22 * ZOOM]]) {
+        const g = cx.createRadialGradient(ex, ey, 0, ex, ey, er);
+        g.addColorStop(0, 'rgba(255,255,250,' + .9 * k + ')'); g.addColorStop(0.35, 'rgba(255,80,60,' + .6 * k + ')'); g.addColorStop(1, 'rgba(255,40,30,0)');
+        cx.fillStyle = g; cx.beginPath(); cx.arc(ex, ey, er, 0, TAU); cx.fill();
+      }
     } else if (f.kind === 'laser') {
       const x1 = (f.x1 - camX) * ZOOM, y1 = (f.y1 - camY) * ZOOM, x2 = (f.x2 - camX) * ZOOM, y2 = (f.y2 - camY) * ZOOM;
       cx.lineCap = 'round';
@@ -2706,6 +2757,7 @@ function startGame(hk) {
   for (const h of heroes) {
     h.level = 6;                     // ARAM rules: the whole kit is live from minute one
     heroStat(h); h.hp = h.maxHp; units.push(h);
+    if (h.hkey === 'bastille') h._nanoT = 0.3;   // GOLIATH materialises (nanite morph) on match start
   }
   if (DEMOF) {
     // everyone level 6 (ults online), arrayed in two arcs around the altar
@@ -2808,7 +2860,7 @@ function netLerp(dt) {
 function guestMkFromSnap(a) {
   const [id, team, key, x, y, face, hp, maxHp, level, mov, hkey, sh, buff, kind] = a;
   let u;
-  if (hkey && HEROES[hkey]) { u = mkHero(team, hkey, x, y); u.level = level || 1; }
+  if (hkey && HEROES[hkey]) { u = mkHero(team, hkey, x, y); u.level = level || 1; if (hkey === 'bastille') u._nanoT = time; }
   else u = mkUnit(team, key, x, y, { hp: maxHp, dmg: 0, range: 60, speed: 120, r: kind === 'monster' ? 16 : 12, cd: 1 }, kind);
   u.id = id; u.hp = hp; u.maxHp = maxHp; u.face = face;
   return u;
