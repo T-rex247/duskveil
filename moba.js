@@ -2696,7 +2696,8 @@ function startGame(hk) {
     h.lane = i === 0 ? 1 : 2;                      // ally 1 bot lane, ally 2 jungles
     heroes.push(h);
   });
-  const epool = DEMOF ? all.filter(k => k !== hk && !allies.includes(k)) : all.sort(() => Math.random() - .5).slice(0, 3);
+  // enemy team never mirrors the PLAYER'S legend (Tee 2026-08-21: no second Goliath when you play Goliath)
+  const epool = DEMOF ? all.filter(k => k !== hk && !allies.includes(k)) : all.filter(k => k !== hk).sort(() => Math.random() - .5).slice(0, 3);
   epool.forEach((k, i) => {
     const h = mkHero(1, k, WORLD.w - 380, MID_Y + (i - 1) * 80);
     h.lane = i;                                     // top / bot / jungle
